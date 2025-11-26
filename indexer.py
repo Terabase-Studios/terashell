@@ -25,13 +25,14 @@ class CommandIndexer:
         "rm": ["-f", "-r", "-i"]
     }
 
-    def __init__(self):
+    def __init__(self, index_path=True):
+        self.index_path = index_path and PATH_INDEXING
         self.commands = self._get_all_commands()
         self.index = self._build_index()
         self.help_indexer = HelpIndexer()
 
     def _get_all_commands(self):
-        if not PATH_INDEXING:
+        if not self.index_path:
             return []
         with yaspin(text="Indexing path", color="yellow") as spinner:
             paths = os.environ.get("PATH", "").split(os.pathsep)

@@ -9,7 +9,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.formatted_text import ANSI
 
-from config import AUTO_COMPLETE, HISTORY_FILE
+from config import AUTO_COMPLETE, HISTORY_FILE, PROMPT_HIGHLIGHTING
 from indexer import CommandIndexer
 
 
@@ -92,7 +92,7 @@ class ShellLexer(Lexer):
                         tokens.append(('class:path', word))
                     else:
                         tokens.append(('class:file', word))
-                elif word.isdigit():
+                elif word.replace(".", "").isdigit():
                     tokens.append(('class:digit', word))
                 elif word.startswith('-'):
                     tokens.append(('class:optional', word))
@@ -124,7 +124,7 @@ style = Style.from_dict({
 class ShellInput:
     def __init__(self, shell, cmd_prefix="NoPrefixFound!> "):
         self.shell = shell
-        self.indexer = CommandIndexer()
+        self.indexer = CommandIndexer(index_path=AUTO_COMPLETE)
 
         # Use FileHistory for persistent history
         self.history = FileHistory(HISTORY_FILE)
@@ -138,8 +138,13 @@ class ShellInput:
         else:
             completer = None
 
+        if PROMPT_HIGHLIGHTING:
+            lexer = ShellLexer(self.shell)
+        else:
+            lexer = None
+
         self.session = PromptSession(
-            lexer=ShellLexer(shell),
+            lexer=lexer,
             style=style,
             completer=completer,
             history=self.history
