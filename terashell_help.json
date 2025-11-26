@@ -1,0 +1,65 @@
+{
+  "fts": {
+    "positional": [
+      "path",
+      "ip"
+    ],
+    "optional": [
+      {
+        "flags": [
+          "-h",
+          "--help"
+        ],
+        "desc": "show this help message and exit"
+      },
+      {
+        "flags": [
+          "-q",
+          "--quiet"
+        ],
+        "desc": "suppress non-critical output"
+      },
+      {
+        "flags": [
+          "-v",
+          "--verbose"
+        ],
+        "desc": "enable verbose debug output"
+      },
+      {
+        "flags": [
+          "-n",
+          "--name NAME"
+        ],
+        "desc": "send file with this name"
+      },
+      {
+        "flags": [
+          "-p",
+          "--port PORT"
+        ],
+        "desc": "override port used (change to port an open server is running on)"
+      },
+      {
+        "flags": [
+          "-l",
+          "--limit LIMIT"
+        ],
+        "desc": "max sending speed (e.g. 500KB, 2MB, 1GB)"
+      },
+      {
+        "flags": [
+          "--nocompress"
+        ],
+        "desc": "Skip compression (use if fts is compressing an already compressed file)"
+      },
+      {
+        "flags": [
+          "--progress"
+        ],
+        "desc": "show progress bar for the transfer"
+      }
+    ],
+    "subcommands": []
+  }
+}
