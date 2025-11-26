@@ -9,31 +9,57 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.formatted_text import ANSI
 
-
+from config import AUTO_COMPLETE
 from indexer import CommandIndexer
+
 
 class CommandCompleter(Completer):
     """
-    Completes only the first word (command) in the input.
+    Completes the first word (command) separately,
+    then uses HelpIndexer for subcommands and flags.
     """
-    def __init__(self, words, ignore_case=True):
-        self.words = sorted(words)
+
+    def __init__(self, command_indexer, extra_commands = [], ignore_case=True):
+        self.help_indexer = command_indexer
         self.ignore_case = ignore_case
+        self.commands = sorted(command_indexer.get_commands() + extra_commands)  # top-level commands
 
     def get_completions(self, document, complete_event):
         text_before_cursor = document.text_before_cursor
-        if " " in text_before_cursor:
-            # Only complete if the cursor is in the first word
-            first_word = text_before_cursor.split()[0]
-            if document.cursor_position <= len(first_word):
-                for word in self.words:
-                    if word.lower().startswith(first_word.lower()):
-                        yield Completion(word, start_position=-len(first_word))
-        else:
-            # No space yet, complete normally
-            for word in self.words:
-                if word.lower().startswith(text_before_cursor.lower()):
-                    yield Completion(word, start_position=-len(text_before_cursor))
+        tokens = text_before_cursor.split()
+
+        if not tokens:
+            return
+
+        # --- First word: command completion ---
+        if len(tokens) == 1 and text_before_cursor[-1] != " ":
+            first_word = tokens[0]
+            start_pos = -len(first_word)
+            for cmd in self.commands:
+                cmd_name = cmd.split(".")[0]  # only top-level
+                if self.ignore_case:
+                    if cmd_name.lower().startswith(first_word.lower()):
+                        yield Completion(cmd_name, start_position=start_pos)
+                else:
+                    if cmd_name.startswith(first_word):
+                        yield Completion(cmd_name, start_position=start_pos)
+            return  # don't try subcommands/flags yet
+
+        # --- Subcommands/flags completion ---
+        # Use HelpIndexer for suggestions
+        suggested = self.help_indexer.help_indexer.get_suggested(text_before_cursor)
+        suggestions = suggested.get("suggestions", [])
+
+        last_token = tokens[-1]
+        start_pos = -len(last_token)
+
+        for s in suggestions:
+            if self.ignore_case:
+                if s.lower().startswith(last_token.lower()):
+                    yield Completion(s, start_position=start_pos)
+            else:
+                if s.startswith(last_token):
+                    yield Completion(s, start_position=start_pos)
 
 
 # Lexer with live path highlighting
@@ -55,8 +81,10 @@ class ShellLexer(Lexer):
                 if not os.path.isabs(full_path):
                     full_path = os.path.join(cwd, full_path)
 
+                if word.startswith("$"):
+                    tokens.append(('class:env_var', word))
                 # Partial path exists check: highlight even if only partially typed
-                if os.path.exists(full_path) or any(
+                elif os.path.exists(full_path) or any(
                     f.startswith(os.path.basename(full_path))
                     for f in (os.listdir(os.path.dirname(full_path)) if os.path.exists(os.path.dirname(full_path)) else [])
                 ):
@@ -69,7 +97,10 @@ class ShellLexer(Lexer):
                 elif word.startswith('-'):
                     tokens.append(('class:optional', word))
                 elif i == 0:
-                    tokens.append(('class:command', word))
+                    if word in self.shell.command_handler.get_commands():
+                        tokens.append(('class:built_in', word))
+                    else:
+                        tokens.append(('class:command', word))
                 else:
                     tokens.append(('class:arg', word))
                 tokens.append(('', ' '))  # add space back
@@ -85,18 +116,26 @@ style = Style.from_dict({
     'optional': '#808080',
     'path': 'ansicyan',
     'file': 'ansiwhite',
+    'env_var': 'ansigreen',
+    'built_in': 'ansigreen'
 })
 
 # Shell input
 class ShellInput:
     def __init__(self, shell, cmd_prefix="NoPrefixFound!> "):
         self.shell = shell
+        self.history = InMemoryHistory()
         self.indexer = CommandIndexer()
-        self.history = InMemoryHistory()  # <-- Add history here
+
+        if AUTO_COMPLETE:
+            completer = CommandCompleter(self.indexer, extra_commands=self.shell.command_handler.get_commands(), ignore_case=True)
+        else:
+            completer = None
+
         self.session = PromptSession(
             lexer=ShellLexer(shell),
             style=style,
-            completer=CommandCompleter(self.indexer.get_commands() + self.shell.command_handler.get_commands(), ignore_case=True),
+            completer=completer,
             history=self.history  # <-- pass it to the session
         )
         self.cmd_prefix = cmd_prefix

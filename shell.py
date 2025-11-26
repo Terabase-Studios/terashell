@@ -24,7 +24,6 @@ class MiniShell:
         try:
             subprocess.run(command, shell=True, stdout=sys.stdout, stderr=sys.stderr, env={**os.environ, "FORCE_COLOR": "1"},
 )
-            print()
         except Exception as e:
             print(f"{SHELL_NAME} error: {e}")
 
@@ -47,6 +46,8 @@ class MiniShell:
                 handled = self.command_handler.handle_command(line)
                 if not handled:
                     self.run(line)
+                print()
+
             except KeyboardInterrupt:
                 print()
 

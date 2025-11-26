@@ -2,7 +2,14 @@ import os
 import sys
 import json
 import re
+from copy import deepcopy
 from pathlib import Path
+import subprocess
+from yaspin import yaspin
+
+
+from config import HELP_FILE, HELP_FLAGS, PATH_INDEXING, EXTRA_SUB_COMMAND_HEADERS, EXTRA_FLAG_HEADERS
+
 
 class CommandIndexer:
     BUILTINS = {
@@ -21,34 +28,38 @@ class CommandIndexer:
     def __init__(self):
         self.commands = self._get_all_commands()
         self.index = self._build_index()
+        self.help_indexer = HelpIndexer()
 
     def _get_all_commands(self):
-        paths = os.environ.get("PATH", "").split(os.pathsep)
-        commands = set()
+        if not PATH_INDEXING:
+            return []
+        with yaspin(text="Indexing path", color="yellow") as spinner:
+            paths = os.environ.get("PATH", "").split(os.pathsep)
+            commands = set()
 
-        if sys.platform.startswith("win"):
-            exts = os.environ.get("PATHEXT", ".EXE;.BAT;.CMD;.COM").split(";")
-            exts = [e.lower() for e in exts]
-            for path in paths:
-                if not os.path.isdir(path):
-                    continue
-                for f in os.listdir(path):
-                    full_path = os.path.join(path, f)
-                    _, ext = os.path.splitext(f)
-                    if os.path.isfile(full_path) and ext.lower() in exts:
-                        commands.add(os.path.splitext(f)[0])
-            commands.update(self.BUILTINS["win"])
-        else:
-            for path in paths:
-                if not os.path.isdir(path):
-                    continue
-                for f in os.listdir(path):
-                    full_path = os.path.join(path, f)
-                    if os.path.isfile(full_path) and os.access(full_path, os.X_OK):
-                        commands.add(f)
-            commands.update(self.BUILTINS["unix"])
+            if sys.platform.startswith("win"):
+                exts = os.environ.get("PATHEXT", ".EXE;.BAT;.CMD;.COM").split(";")
+                exts = [e.lower() for e in exts]
+                for path in paths:
+                    if not os.path.isdir(path):
+                        continue
+                    for f in os.listdir(path):
+                        full_path = os.path.join(path, f)
+                        _, ext = os.path.splitext(f)
+                        if os.path.isfile(full_path) and ext.lower() in exts:
+                            commands.add(os.path.splitext(f)[0])
+                commands.update(self.BUILTINS["win"])
+            else:
+                for path in paths:
+                    if not os.path.isdir(path):
+                        continue
+                    for f in os.listdir(path):
+                        full_path = os.path.join(path, f)
+                        if os.path.isfile(full_path) and os.access(full_path, os.X_OK):
+                            commands.add(f)
+                commands.update(self.BUILTINS["unix"])
 
-        return sorted(commands)
+            return sorted(commands)
 
     def _build_index(self):
         index = {}
@@ -70,10 +81,10 @@ class CommandIndexer:
 
 
 class HelpIndexer:
-    def __init__(self, json_path="terashell_help.json"):
+
+    def __init__(self, json_path=HELP_FILE):
         self.json_path = Path(json_path)
         self.data = {}
-
         if self.json_path.exists():
             try:
                 self.data = json.loads(self.json_path.read_text())
@@ -81,82 +92,211 @@ class HelpIndexer:
                 self.data = {}
 
     # ============================================================
+    # Auto-generate help by running the tool
+    # ============================================================
+    def map_tool(self, tool_name, base_cmd=None, recursive_depth=1, _depth=0, main=True):
+        """
+        Runs the tool with multiple help flags and harvests its help text.
+        Recursively processes subcommands.
+        """
+        if main:
+            copy_tool_name = tool_name
+            dict_copy = deepcopy(self.data)
+            for entry in dict_copy:
+                if entry.startswith(copy_tool_name):
+                    del self.data[entry]
+            tool_name = copy_tool_name
+
+        if not base_cmd:
+            base_cmd = [tool_name]
+
+        collected_help = ""
+        for flag in HELP_FLAGS:
+            try:
+                result = subprocess.run(
+                    base_cmd + [flag],
+                    capture_output=True,
+                    text=True,
+                    timeout=3
+                )
+                if result.returncode == 0 or result.stdout:
+                    collected_help = result.stdout
+                    break
+            except FileNotFoundError:
+                result = subprocess.run(
+                    base_cmd + [flag],
+                    shell=True,
+                    stdout=sys.stdout,
+                    stderr=sys.stderr,
+                    env={**os.environ, "FORCE_COLOR": "1"},
+                )
+                return
+            except Exception as e:
+                import traceback
+                print(traceback.format_exception(e))
+                continue  # skip flags that fail
+
+        if not collected_help:
+            print(f"Unable to find help for \"{tool_name}\"")
+            return  # no help found
+
+        # Update JSON with parsed help
+        full_key = ".".join(base_cmd)
+        self.update_command(full_key, collected_help)
+
+        entry = self.data.get(full_key)
+        if not entry:
+            print(f"Unable to update autocomplete for \"{tool_name}\"")
+            return  # no help found
+
+        if recursive_depth and _depth >= recursive_depth:
+            return
+
+        # Recursively process subcommands
+        for sub in entry.get("subcommands", []):
+            sub_name = sub["name"]
+            sub_base_cmd = base_cmd + [sub_name]
+            # only recurse if we haven't indexed it yet
+            full_sub_key = ".".join(sub_base_cmd)
+            if full_sub_key not in self.data:
+                self.map_tool(tool_name, sub_base_cmd, recursive_depth=recursive_depth, _depth=_depth + 1, main=False)
+
+        self.print_help(tool_name)
+
+    def print_help(self, key, indent=0):
+        """
+        Pretty-print a help entry from the autocomplete JSON.
+        data: dict containing all entries
+        key: the specific command to print
+        """
+        if key not in self.data:
+            print("[DISPLAY ERROR] Command not found:", key)
+            return
+
+        entry = self.data[key]
+        spacer = "  " * indent
+        name = key.split(".")[-1]
+
+        # Print command header
+        print(f"{spacer}{name}:\n{spacer}{"-"*(len(name)+1)}")
+
+        # Positional arguments
+        if entry.get("positional"):
+            print(f"{spacer}Positional arguments:")
+            for p in entry["positional"]:
+                print(f"{spacer}  {p}")
+
+        # Optional flags
+        if entry.get("optional"):
+            print(f"{spacer}Options:")
+            for opt in entry["optional"]:
+                flags = ", ".join(opt["flags"])
+                desc = opt.get("desc", "")
+                print(f"{spacer}  {flags:<20} {desc}")
+
+        # Subcommands
+        if entry.get("subcommands"):
+            print(f"{spacer}Subcommands:")
+            for sub in entry["subcommands"]:
+                sub_name = sub["name"]
+                sub_desc = sub.get("desc", "")
+                print(f"{spacer}  {sub_name:<15} {sub_desc}")
+
+        # Recurse into subcommands if they have their own entries
+        for sub in entry.get("subcommands", []):
+            sub_key = f"{key}.{sub['name']}"
+            if sub_key in self.data:
+                print()
+                self.print_help(sub_key, indent=indent + 1)
+
+
+    # ============================================================
     # Core: Parse help text (your existing logic, embedded cleanly)
     # ============================================================
-    def parse_help(self, text):
+    def parse_help(self, text, extra_headers=None, extra_flag_headers=EXTRA_FLAG_HEADERS, extra_subcommand_headers=EXTRA_SUB_COMMAND_HEADERS):
+        """
+        Parse help text into positional, optional, subcommands, and extra headers.
+        extra_headers: list of additional section headers to capture
+        """
+
         positional = []
         optional = []
         subcommands = []
+        other_sections = {}
 
         lines = [ln.rstrip() for ln in text.splitlines()]
 
-        sections = {}
+        # Default headers
+        headers = ["positional arguments", "options", "optional arguments", "arguments", "commands", "general options"]
+        if extra_headers:
+            headers.extend(extra_headers)
+        if extra_flag_headers:
+            headers.extend(extra_flag_headers)
+        if extra_subcommand_headers:
+            headers.extend(extra_subcommand_headers)
+
+        subcommand_headers = ["commands", "command"]
+        if extra_subcommand_headers:
+            subcommand_headers.extend(extra_subcommand_headers)
+
+        flag_headers = ["options", "optional arguments", "general options"]
+        if extra_flag_headers:
+            flag_headers.extend(extra_flag_headers)
+
         current = None
         for ln in lines:
             header = re.match(
-                r'\s*(positional arguments|options|optional arguments|arguments):',
+                rf'\s*({"|".join(headers)}):',
                 ln,
                 flags=re.I
             )
             if header:
-                current = header.group(1).lower()
-                sections[current] = []
+                current = header.group(1).strip()
+                other_sections[current] = []
             elif current:
-                sections[current].append(ln)
+                other_sections[current].append(ln)
 
         # positional arguments
-        pos_section = sections.get("positional arguments", []) or sections.get("arguments", [])
+        pos_section = other_sections.get("positional arguments", []) or other_sections.get("arguments", [])
         for ln in pos_section:
             m = re.match(r'\s*([a-zA-Z0-9_-]+)\s{2,}(.+)', ln)
             if m:
                 name, desc = m.groups()
                 positional.append(name)
 
-        # subcommands under COMMAND
-        in_commands = False
-        for ln in pos_section:
-            if ln.strip().startswith("COMMAND"):
-                in_commands = True
-                continue
-            if in_commands:
-                m = re.match(r'\s{4,}([a-zA-Z0-9_-]+)\s{2,}(.+)', ln)
+        # collect subcommands from known headers + lines starting with spaces + name + description
+        for section_name, lines in other_sections.items():
+            for ln in lines:
+                # match lines that look like subcommands (e.g., "  send   connect to...")
+                m = re.match(r'\s{2,}([a-zA-Z0-9_-]+)\s{2,}(.+)', ln)
                 if m:
-                    subcommands.append({
-                        'name': m.group(1),
-                        'desc': m.group(2)
-                    })
-                else:
-                    if ln.strip():
-                        continue
-                    break
+                    name, desc = m.groups()
+                    # ignore lines that are just the 'available commands:' text
+                    if "available commands" not in desc.lower():
+                        subcommands.append({"name": name, "desc": desc})
 
         # options
-        opt_section = sections.get("options", []) or sections.get("optional arguments", [])
-        for ln in opt_section:
-            m = re.match(
-                r'\s*([-\w]+(?:,\s*[-\w]+)*)(?:\s+([A-Z0-9_<>]+))?\s{2,}(.*)',
-                ln
-            )
-            if not m:
-                continue
+        for hdr in flag_headers:
+            for ln in other_sections.get(hdr, []):
+                m = re.match(
+                    r'\s*([-\w]+(?:,\s*[-\w]+)*)(?:\s+([A-Z0-9_<>]+))?\s{2,}(.*)',
+                    ln
+                )
+                if not m:
+                    continue
+                flag_blob, metavar, desc = m.groups()
+                flags = [f.strip() for f in flag_blob.split(',')]
+                optional.append({"flags": flags, "desc": desc.strip()})
 
-            flag_blob, metavar, desc = m.groups()
-            flags = [f.strip() for f in flag_blob.split(',')]
-
-            if metavar:
-                flags[-1] += " " + metavar
-
-            optional.append({
-                'flags': flags,
-                'desc': desc.strip()
-            })
+        subcommand_names = [z['name'] for z in subcommands]
+        positional = [x for x in positional if x not in subcommand_names]
 
         return {
             "positional": positional,
             "optional": optional,
-            "subcommands": subcommands
+            "subcommands": subcommands,
+            "sections": other_sections  # extra headers are kept here
         }
-
     # ============================================================
     # Store or update help data
     # ============================================================
@@ -196,7 +336,8 @@ class HelpIndexer:
                     sub_map[s["name"]] = s
             existing["subcommands"] = list(sub_map.values())
 
-            # Positional rarely matters for root commands → ignore
+        self._save()
+        return self.data[tool_name]
 
     def _save(self):
         self.json_path.write_text(json.dumps(self.data, indent=2))
@@ -211,76 +352,46 @@ class HelpIndexer:
 
         tool = tokens[0]
 
-        # No entry at all
         if tool not in self.data:
             return {"command": tool, "suggestions": [], "error": "Unknown command"}
 
-        base_entry = self.data[tool]
-        entry = base_entry
-
+        entry = self.data[tool]
         typed_sub = None
+
+        # Detect subcommand
         if len(tokens) > 1:
-            # Detect subcommand
             candidate = tokens[1]
-            for sub in base_entry["subcommands"]:
+            for sub in entry.get("subcommands", []):
                 if candidate == sub["name"]:
                     typed_sub = candidate
                     break
 
-        # If subcommand help exists → switch to it
+        # Switch to subcommand context if exists
         if typed_sub and f"{tool}.{typed_sub}" in self.data:
             entry = self.data[f"{tool}.{typed_sub}"]
 
         suggestions = []
 
-        # If no subcommand typed yet → suggest subcommands
+        # Suggest subcommands if none typed yet
         if typed_sub is None:
-            for s in base_entry["subcommands"]:
-                suggestions.append(s["name"])
+            suggestions.extend([s["name"] for s in entry.get("subcommands", [])])
 
-        # Always suggest flags for the current entry
-        for opt in entry["optional"]:
-            for flag in opt["flags"]:
-                suggestions.append(flag)
+        # Suggest flags while keeping short flags behind long flags
+        for opt in entry.get("optional", []):
+            flags = opt["flags"]
+            if len(flags) == 2 and flags[0].startswith("--") and flags[1].startswith("-"):
+                # long flag first, short flag after
+                suggestions.extend(flags)
+            else:
+                suggestions.extend(flags)
 
         # Prefix filtering
         pref = tokens[-1]
-        suggestions = [s for s in suggestions if s.startswith(pref)]
+        if pref and pref != typed_sub and pref != tool:
+            suggestions = [s for s in suggestions if s.startswith(pref)]
 
         return {
             "command": tool,
             "subcommand": typed_sub,
-            "suggestions": sorted(set(suggestions))
+            "suggestions": suggestions
         }
-
-
-# ============================================================
-# Example use
-# ============================================================
-if __name__ == "__main__":
-    db = HelpIndexer()
-
-    helptext = """
-
-usage: fts send [-h] [-q | -v] [-log LOGFILE] [-n NAME] [-p PORT] [-l LIMIT] [--nocompress] [--progress] path ip
-
-positional arguments:
-  path                  path to the file being sent
-  ip                    server IP to send to
-
-options:
-  -h, --help            show this help message and exit
-  -q, --quiet           suppress non-critical output
-  -v, --verbose         enable verbose debug output
-  -log, --logfile LOGFILE
-                        log output to a file
-  -n, --name NAME       send file with this name
-  -p, --port PORT       override port used (change to port an open server is running on)
-  -l, --limit LIMIT     max sending speed (e.g. 500KB, 2MB, 1GB)
-  --nocompress          Skip compression (use if fts is compressing an already compressed file)
-  --progress            show progress bar for the transfer
-"""
-
-    db.update_command("fts", helptext)
-
-    print(db.get_suggested("fts send "))

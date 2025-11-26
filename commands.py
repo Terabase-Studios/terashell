@@ -9,8 +9,13 @@ class ShellCommands:
 
         self.commands = {
             "exit": self._cmd_exit,
-            "echo": self._cmd_echo,
             "cd": self._cmd_cd,
+            "map": self._cmd_map,
+        }
+
+        self.help = {
+            "exit": f"exit {SHELL_NAME} and return to original command line",
+            "map": f"run a tool and its commands recursively and add/update autocompletion",
         }
 
         self.command_list = list(self.commands.keys())
@@ -38,9 +43,6 @@ class ShellCommands:
     def _cmd_exit(self, args):
         self.shell.running = False
 
-    def _cmd_echo(self, args):
-        print(" ".join(args))
-
     def _cmd_cd(self, args):
         if not args:
             # default to home directory
@@ -53,3 +55,6 @@ class ShellCommands:
             os.chdir(self.shell.working_dir)  # update Python process cwd
         else:
             print(f"{SHELL_NAME}: cd: no such directory: {args[0]}")
+
+    def _cmd_map(self, args):
+        self.shell.input_handler.indexer.help_indexer.map_tool(args[0])
