@@ -6,7 +6,7 @@ from copy import deepcopy
 from pathlib import Path
 import subprocess
 from yaspin import yaspin
-
+import traceback
 
 from config import HELP_FILE, HELP_FLAGS, PATH_INDEXING, EXTRA_SUB_COMMAND_HEADERS, EXTRA_FLAG_HEADERS, EXTRA_POSITIONAL_HEADERS
 
@@ -117,7 +117,7 @@ class HelpIndexer:
                     base_cmd + [flag],
                     capture_output=True,
                     text=True,
-                    timeout=3
+                    timeout=2
                 )
                 if result.returncode == 0 or result.stdout:
                     collected_help = result.stdout
@@ -132,7 +132,6 @@ class HelpIndexer:
                 )
                 return
             except Exception as e:
-                import traceback
                 print(traceback.format_exception(e))
                 continue  # skip flags that fail
 
@@ -162,8 +161,15 @@ class HelpIndexer:
                 self.map_tool(tool_name, sub_base_cmd, recursive_depth=recursive_depth, _depth=_depth + 1, main=False)
 
         self.print_help(tool_name, recursive_depth=recursive_depth)
-        print()
-        print("The preceding output is a fuzzy command representation; it may be inaccurate but should work for autocomplete.")
+        print("""
+        The preceding output is a fuzzy command representation; 
+        it may be inaccurate but should somewhat work for autocomplete.
+        
+        If you don't see anything after the tool name then 
+        the shell was unable to parse its help message."
+        
+        """)
+
 
     def print_help(self, key, indent=0, recursive_depth=1, _depth=0):
         """
@@ -216,106 +222,108 @@ class HelpIndexer:
                 self.print_help(sub_key, indent=indent + 1, recursive_depth=recursive_depth, _depth=_depth + 1)
 
 
+    def parse_help(
+                self,
+                text: str,
+                extra_headers: list[str] = None,
+                extra_positional_headers: list[str] = None,
+                extra_flag_headers: list[str] = None,
+                extra_subcommand_headers: list[str] = None,
+        ) -> dict:
+            positional = []
+            optional = []
+            subcommands = []
+            sections = {}
 
-    # ============================================================
-    # Core: Parse help text (your existing logic, embedded cleanly)
-    # ============================================================
-    def parse_help(self, text, extra_headers=None, extra_positional_headers=EXTRA_POSITIONAL_HEADERS, extra_flag_headers=EXTRA_FLAG_HEADERS, extra_subcommand_headers=EXTRA_SUB_COMMAND_HEADERS):
-        """
-        Parse help text into positional, optional, subcommands, and extra headers.
-        extra_headers: list of additional section headers to capture
-        """
+            lines = [line.rstrip() for line in text.splitlines()]
 
-        positional = []
-        optional = []
-        subcommands = []
-        other_sections = {}
+            # Default headers
+            positional_headers = ["positional arguments"] + (extra_positional_headers or [])
+            subcommand_headers = ["commands", "command"] + (extra_subcommand_headers or [])
+            flag_headers = [
+                               "options",
+                               "optional arguments",
+                               "general options",
+                               "options (and corresponding environment variables)"
+                           ] + (extra_flag_headers or [])
 
-        lines = [ln.rstrip() for ln in text.splitlines()]
+            all_headers = positional_headers + subcommand_headers + flag_headers
 
-        # Default headers
-        positional_headers = ["positional arguments"]
-        if extra_subcommand_headers:
-            positional_headers.extend(extra_positional_headers)
+            # Collect lines under each header
+            current_header = None
 
-        subcommand_headers = ["commands", "command"]
-        if extra_subcommand_headers:
-            subcommand_headers.extend(extra_subcommand_headers)
+            # Escape headers for regex
+            escaped_headers = [re.escape(h) for h in all_headers]
 
-        flag_headers = ["options", "optional arguments", "general options", "options (and corresponding environment variables)"]
-        if extra_flag_headers:
-            flag_headers.extend(extra_flag_headers)
+            for line in lines:
+                match = re.match(rf'\s*({"|".join(escaped_headers)}):', line, flags=re.I)
+                if match:
+                    current_header = match.group(1).strip()
+                    sections[current_header.lower()] = []
+                elif current_header:
+                    sections[current_header.lower()].append(line)
 
-        headers = positional_headers + subcommand_headers + flag_headers
-
-
-        current = None
-        for ln in lines:
-            header = re.match(
-                rf'\s*({"|".join(headers)}):',
-                ln,
-                flags=re.I
-            )
-            if header:
-                current = header.group(1).strip()
-                other_sections[current] = []
-            elif current:
-                other_sections[current].append(ln)
-
-        # find the first positional header that exists in other_sections
-        pos_section = None
-        for header in positional_headers:
-            if header.lower() in other_sections:
-                pos_section = other_sections[header.lower()]
-                break
-
-        # parse the positional arguments
-        if pos_section:
-            for ln in pos_section:
-                # skip lines that are like 'COMMAND   available commands:'
-                if "available commands" in ln.lower():
+            # Parse positional arguments
+            pos_section = next((sections[h.lower()] for h in positional_headers if h.lower() in sections), [])
+            for line in pos_section:
+                if "available commands" in line.lower():
                     continue
-                m = re.match(r'\s*([a-zA-Z0-9_-]+)\s{2,}(.+)', ln)
+                m = re.match(r'\s*([a-zA-Z0-9_-]+)\s{2,}(.+)', line)
                 if m:
-                    name, desc = m.groups()
+                    name, _ = m.groups()
                     positional.append(name)
 
-        # collect subcommands from known headers + lines starting with spaces + name + description
-        for section_name, lines in other_sections.items():
-            for ln in lines:
-                # match lines that look like subcommands (e.g., "  send   connect to...")
-                m = re.match(r'\s{2,}([a-zA-Z0-9_-]+)\s{2,}(.+)', ln)
-                if m:
-                    name, desc = m.groups()
-                    # ignore lines that are just the 'available commands:' text
-                    if "available commands" not in desc.lower():
-                        subcommands.append({"name": name, "desc": desc})
+            # Parse subcommands
+            for section_lines in sections.values():
+                for line in section_lines:
+                    m = re.match(r'\s{2,}([a-zA-Z0-9_-]+)\s{2,}(.+)', line)
+                    if m:
+                        name, desc = m.groups()
+                        if "available commands" not in desc.lower():
+                            subcommands.append({"name": name, "desc": desc.strip()})
 
-        # options
-        for section_name, lines in other_sections.items():
-            # match if the section_name starts with a known flag header (case-insensitive)
-            if any(section_name.lower().startswith(hdr.lower()) for hdr in flag_headers):
-                for ln in lines:
-                    m = re.match(
-                        r'\s*([-\w]+(?:,\s*[-\w]+)*)(?:\s+([A-Z0-9_<>]+))?\s{2,}(.*)',
-                        ln
-                    )
-                    if not m:
-                        continue
-                    flag_blob, metavar, desc = m.groups()
-                    flags = [f.strip() for f in flag_blob.split(',')]
-                    optional.append({"flags": flags, "desc": desc.strip()})
+            # Parse optional flags
+            for header, lines in sections.items():
+                if any(header.startswith(h.lower()) for h in flag_headers):
+                    current_option = None
+                    for line in lines:
+                        line = line.rstrip()
 
-        optional = [i for i in optional if i["flags"][0].startswith("-")]
-        subcommand_names = [z['name'] for z in subcommands]
-        positional = [x for x in positional if x not in subcommand_names]
+                        m = re.match(
+                            r'\s*([-\w][-\w, ]*?)'  # flag blob: one or more flags separated by comma or space
+                            r'(?:\s+([A-Z0-9_<>-]+))?'  # optional metavar (captured separately)
+                            r'\s*:\s*(.*)',  # description starts after the first colon
+                            line
+                        )
 
-        return {
-            "positional": positional,
-            "optional": optional,
-            "subcommands": subcommands,
-            "sections": other_sections  # extra headers are kept here
-        }
+                        if m:
+                            flag_blob, metavar, desc = m.groups()
+                            flags = [f.strip().split(" ")[0] for f in flag_blob.split(',') if f.strip() and f.strip() != '-']
+                            if flags:
+                                opt = {"flags": flags, "desc": desc.strip()}
+                                if metavar:
+                                    opt["metavar"] = metavar
+                                optional.append(opt)
+                                current_option = opt
+                        else:
+                            # continuation line
+                            if current_option and line.strip():
+                                current_option["desc"] += " " + line.strip()
+                            else:
+                                current_option = None
+
+            # Filter invalid optional flags and positional duplicates
+            optional = [o for o in optional if o["flags"] and o["flags"][0].startswith("-")]
+            positional = [p for p in positional if p not in {s["name"] for s in subcommands}]
+
+            return {
+                "positional": positional,
+                "optional": optional,
+                "subcommands": subcommands,
+                "sections": sections
+            }
+
+
     # ============================================================
     # Store or update help data
     # ============================================================

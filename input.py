@@ -6,10 +6,10 @@ from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.styles import Style
 from prompt_toolkit.completion import Completer, Completion, WordCompleter
 from prompt_toolkit import PromptSession
-from prompt_toolkit.history import InMemoryHistory
+from prompt_toolkit.history import FileHistory
 from prompt_toolkit.formatted_text import ANSI
 
-from config import AUTO_COMPLETE
+from config import AUTO_COMPLETE, HISTORY_FILE
 from indexer import CommandIndexer
 
 
@@ -124,11 +124,17 @@ style = Style.from_dict({
 class ShellInput:
     def __init__(self, shell, cmd_prefix="NoPrefixFound!> "):
         self.shell = shell
-        self.history = InMemoryHistory()
         self.indexer = CommandIndexer()
 
+        # Use FileHistory for persistent history
+        self.history = FileHistory(HISTORY_FILE)
+
         if AUTO_COMPLETE:
-            completer = CommandCompleter(self.indexer, extra_commands=self.shell.command_handler.get_commands(), ignore_case=True)
+            completer = CommandCompleter(
+                self.indexer,
+                extra_commands=self.shell.command_handler.get_commands(),
+                ignore_case=True
+            )
         else:
             completer = None
 
@@ -136,7 +142,7 @@ class ShellInput:
             lexer=ShellLexer(shell),
             style=style,
             completer=completer,
-            history=self.history  # <-- pass it to the session
+            history=self.history
         )
         self.cmd_prefix = cmd_prefix
 
@@ -152,3 +158,30 @@ class ShellInput:
             return None
 
         return command
+
+    def print_history(self):
+        print("\n".join(self.history.get_strings()))
+
+    def clear_history(self):
+        # wipe the file
+        del self.history
+        open(HISTORY_FILE, "w").close()
+
+        # rebuild the session
+        self.history = FileHistory(HISTORY_FILE)
+
+        if AUTO_COMPLETE:
+            completer = CommandCompleter(
+                self.indexer,
+                extra_commands=self.shell.command_handler.get_commands(),
+                ignore_case=True
+            )
+        else:
+            completer = None
+
+        self.session = PromptSession(
+            lexer=ShellLexer(self.shell),
+            style=style,
+            completer=completer,
+            history=self.history
+        )

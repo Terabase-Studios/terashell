@@ -1,6 +1,7 @@
 import os
+import traceback
 
-from config import SHELL_NAME
+from config import SHELL_NAME, MAP_WARN_DISABLED_FILE, HISTORY_FILE, HELP_FLAGS
 
 
 class ShellCommands:
@@ -12,12 +13,16 @@ class ShellCommands:
             "exit": self._cmd_exit,
             "cd": self._cmd_cd,
             "map": self._cmd_map,
+            "history": self._cmd_history,
+            "history clear": self._cmd_history,
         }
 
         self.help = {
-            "t?": f"See {SHELL_NAME} commands",
-            "exit": f"exit {SHELL_NAME} and return to original command line",
-            "map": f"run a tool and its commands recursively and add/update autocompletion",
+            "t?": f"See {SHELL_NAME} commands.",
+            "exit": f"Exit {SHELL_NAME} and return to original command line.",
+            "map": f"Run a tool and its commands recursively and add/update autocompletion.",
+            "history": "See all previous inputs.",
+            "history clear": "Clear input history.",
         }
 
         self.command_list = list(self.commands.keys())
@@ -37,20 +42,22 @@ class ShellCommands:
         try:
             func(args)
         except Exception as e:
-            print(f"{SHELL_NAME} command error: {e}")
+            print(f"{SHELL_NAME} command error:\n{traceback.format_exc(e)}")
 
         return True
 
     # --- built-ins ---
     def _cmd_help(self, args):
-        header = f"{SHELL_NAME} Commands:"
+        header = f" {SHELL_NAME} Commands:"
         print(header, "\n", "-" * len(header))
-        for command in self.help:
-            print(f"\t{command}: {self.help[command]}")
+        width = max(len(cmd) for cmd in self.help)
+
+        for cmd, desc in self.help.items():
+            print(f"\t{cmd.ljust(width)} : {desc}")
         print()
-        header = f"Modified commands:"
+        header = f" Modified commands:"
         print(header, "\n", "-" * len(header))
-        print(", ".join([i for i in self.get_commands() if i not in list(self.help.keys())]))
+        print("\t", ", ".join([i for i in self.get_commands() if i not in list(self.help.keys())]))
 
 
     def _cmd_exit(self, args):
@@ -70,4 +77,21 @@ class ShellCommands:
             print(f"{SHELL_NAME}: cd: no such directory: {args[0]}")
 
     def _cmd_map(self, args):
+        if not os.path.exists(MAP_WARN_DISABLED_FILE):
+            print(f"Warning: This will execute the command and its subcommands with {HELP_FLAGS}!")
+            choice = input("Proceed? [y/N] (Type 'a' to never show this again) ").strip().lower()
+            if choice == "a":
+                with open(MAP_WARN_DISABLED_FILE, "w") as f:
+                    f.write("disabled")
+            elif choice != "y":
+                print("Aborted.")
+                return
+
+        # execute the original behavior
         self.shell.input_handler.indexer.help_indexer.map_tool(args[0])
+
+    def _cmd_history(self, args):
+        if not args:
+            self.shell.input_handler.print_history()
+        elif args[0] == "clear":
+            self.shell.input_handler.clear_history()

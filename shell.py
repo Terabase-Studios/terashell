@@ -1,6 +1,7 @@
 import subprocess
 import sys
 import os
+import traceback
 from commands import ShellCommands
 from config import SHELL_NAME
 from prompt_toolkit.formatted_text import ANSI
@@ -64,6 +65,4 @@ if __name__ == "__main__":
     try:
         shell.start()
     except Exception as ex:
-        print(f"{SHELL_NAME} unhandled error: {ex}")
-
-
+        print(f"{SHELL_NAME} unhandled error:\n{traceback.print_exception(ex)}")
