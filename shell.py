@@ -13,6 +13,12 @@ except ImportError:
     pass
 
 
+INITIAL_PRINT = """
+Welcome to Terashell!
+type 't?' to see a list of added commands!
+"""
+
+
 class MiniShell:
     def __init__(self):
         self.running = True
@@ -28,6 +34,7 @@ class MiniShell:
             print(f"{SHELL_NAME} error: {e}")
 
     def start(self):
+        print(INITIAL_PRINT)
         while self.running:
             try:
                 prefix = ANSI(f"\033[90mTS\033[0m [\033[36m{self.working_dir}\033[0m]:\n\033[90m└> \033[0m")

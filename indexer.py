@@ -8,7 +8,7 @@ import subprocess
 from yaspin import yaspin
 
 
-from config import HELP_FILE, HELP_FLAGS, PATH_INDEXING, EXTRA_SUB_COMMAND_HEADERS, EXTRA_FLAG_HEADERS
+from config import HELP_FILE, HELP_FLAGS, PATH_INDEXING, EXTRA_SUB_COMMAND_HEADERS, EXTRA_FLAG_HEADERS, EXTRA_POSITIONAL_HEADERS
 
 
 class CommandIndexer:
@@ -161,9 +161,11 @@ class HelpIndexer:
             if full_sub_key not in self.data:
                 self.map_tool(tool_name, sub_base_cmd, recursive_depth=recursive_depth, _depth=_depth + 1, main=False)
 
-        self.print_help(tool_name)
+        self.print_help(tool_name, recursive_depth=recursive_depth)
+        print()
+        print("The preceding output is a fuzzy command representation; it may be inaccurate but should work for autocomplete.")
 
-    def print_help(self, key, indent=0):
+    def print_help(self, key, indent=0, recursive_depth=1, _depth=0):
         """
         Pretty-print a help entry from the autocomplete JSON.
         data: dict containing all entries
@@ -194,7 +196,7 @@ class HelpIndexer:
                 desc = opt.get("desc", "")
                 print(f"{spacer}  {flags:<20} {desc}")
 
-        # Subcommands
+
         if entry.get("subcommands"):
             print(f"{spacer}Subcommands:")
             for sub in entry["subcommands"]:
@@ -202,18 +204,23 @@ class HelpIndexer:
                 sub_desc = sub.get("desc", "")
                 print(f"{spacer}  {sub_name:<15} {sub_desc}")
 
+        # Subcommands
+        if _depth >= recursive_depth:
+            return
+
         # Recurse into subcommands if they have their own entries
         for sub in entry.get("subcommands", []):
             sub_key = f"{key}.{sub['name']}"
             if sub_key in self.data:
                 print()
-                self.print_help(sub_key, indent=indent + 1)
+                self.print_help(sub_key, indent=indent + 1, recursive_depth=recursive_depth, _depth=_depth + 1)
+
 
 
     # ============================================================
     # Core: Parse help text (your existing logic, embedded cleanly)
     # ============================================================
-    def parse_help(self, text, extra_headers=None, extra_flag_headers=EXTRA_FLAG_HEADERS, extra_subcommand_headers=EXTRA_SUB_COMMAND_HEADERS):
+    def parse_help(self, text, extra_headers=None, extra_positional_headers=EXTRA_POSITIONAL_HEADERS, extra_flag_headers=EXTRA_FLAG_HEADERS, extra_subcommand_headers=EXTRA_SUB_COMMAND_HEADERS):
         """
         Parse help text into positional, optional, subcommands, and extra headers.
         extra_headers: list of additional section headers to capture
@@ -227,21 +234,20 @@ class HelpIndexer:
         lines = [ln.rstrip() for ln in text.splitlines()]
 
         # Default headers
-        headers = ["positional arguments", "options", "optional arguments", "arguments", "commands", "general options"]
-        if extra_headers:
-            headers.extend(extra_headers)
-        if extra_flag_headers:
-            headers.extend(extra_flag_headers)
+        positional_headers = ["positional arguments"]
         if extra_subcommand_headers:
-            headers.extend(extra_subcommand_headers)
+            positional_headers.extend(extra_positional_headers)
 
         subcommand_headers = ["commands", "command"]
         if extra_subcommand_headers:
             subcommand_headers.extend(extra_subcommand_headers)
 
-        flag_headers = ["options", "optional arguments", "general options"]
+        flag_headers = ["options", "optional arguments", "general options", "options (and corresponding environment variables)"]
         if extra_flag_headers:
             flag_headers.extend(extra_flag_headers)
+
+        headers = positional_headers + subcommand_headers + flag_headers
+
 
         current = None
         for ln in lines:
@@ -256,13 +262,23 @@ class HelpIndexer:
             elif current:
                 other_sections[current].append(ln)
 
-        # positional arguments
-        pos_section = other_sections.get("positional arguments", []) or other_sections.get("arguments", [])
-        for ln in pos_section:
-            m = re.match(r'\s*([a-zA-Z0-9_-]+)\s{2,}(.+)', ln)
-            if m:
-                name, desc = m.groups()
-                positional.append(name)
+        # find the first positional header that exists in other_sections
+        pos_section = None
+        for header in positional_headers:
+            if header.lower() in other_sections:
+                pos_section = other_sections[header.lower()]
+                break
+
+        # parse the positional arguments
+        if pos_section:
+            for ln in pos_section:
+                # skip lines that are like 'COMMAND   available commands:'
+                if "available commands" in ln.lower():
+                    continue
+                m = re.match(r'\s*([a-zA-Z0-9_-]+)\s{2,}(.+)', ln)
+                if m:
+                    name, desc = m.groups()
+                    positional.append(name)
 
         # collect subcommands from known headers + lines starting with spaces + name + description
         for section_name, lines in other_sections.items():
@@ -276,18 +292,21 @@ class HelpIndexer:
                         subcommands.append({"name": name, "desc": desc})
 
         # options
-        for hdr in flag_headers:
-            for ln in other_sections.get(hdr, []):
-                m = re.match(
-                    r'\s*([-\w]+(?:,\s*[-\w]+)*)(?:\s+([A-Z0-9_<>]+))?\s{2,}(.*)',
-                    ln
-                )
-                if not m:
-                    continue
-                flag_blob, metavar, desc = m.groups()
-                flags = [f.strip() for f in flag_blob.split(',')]
-                optional.append({"flags": flags, "desc": desc.strip()})
+        for section_name, lines in other_sections.items():
+            # match if the section_name starts with a known flag header (case-insensitive)
+            if any(section_name.lower().startswith(hdr.lower()) for hdr in flag_headers):
+                for ln in lines:
+                    m = re.match(
+                        r'\s*([-\w]+(?:,\s*[-\w]+)*)(?:\s+([A-Z0-9_<>]+))?\s{2,}(.*)',
+                        ln
+                    )
+                    if not m:
+                        continue
+                    flag_blob, metavar, desc = m.groups()
+                    flags = [f.strip() for f in flag_blob.split(',')]
+                    optional.append({"flags": flags, "desc": desc.strip()})
 
+        optional = [i for i in optional if i["flags"][0].startswith("-")]
         subcommand_names = [z['name'] for z in subcommands]
         positional = [x for x in positional if x not in subcommand_names]
 
@@ -385,10 +404,13 @@ class HelpIndexer:
             else:
                 suggestions.extend(flags)
 
+        # add positional arguments or subcommands
+        suggestions.extend(i["name"] for i in entry.get("subcommands", []) if i["name"] not in line.split())
+
         # Prefix filtering
         pref = tokens[-1]
         if pref and pref != typed_sub and pref != tool:
-            suggestions = [s for s in suggestions if s.startswith(pref)]
+            suggestions = list(set([s for s in suggestions if s.startswith(pref)]))
 
         return {
             "command": tool,

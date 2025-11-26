@@ -8,12 +8,14 @@ class ShellCommands:
         self.shell = shell
 
         self.commands = {
+            "t?": self._cmd_help,
             "exit": self._cmd_exit,
             "cd": self._cmd_cd,
             "map": self._cmd_map,
         }
 
         self.help = {
+            "t?": f"See {SHELL_NAME} commands",
             "exit": f"exit {SHELL_NAME} and return to original command line",
             "map": f"run a tool and its commands recursively and add/update autocompletion",
         }
@@ -40,6 +42,17 @@ class ShellCommands:
         return True
 
     # --- built-ins ---
+    def _cmd_help(self, args):
+        header = f"{SHELL_NAME} Commands:"
+        print(header, "\n", "-" * len(header))
+        for command in self.help:
+            print(f"\t{command}: {self.help[command]}")
+        print()
+        header = f"Modified commands:"
+        print(header, "\n", "-" * len(header))
+        print(", ".join([i for i in self.get_commands() if i not in list(self.help.keys())]))
+
+
     def _cmd_exit(self, args):
         self.shell.running = False
 
