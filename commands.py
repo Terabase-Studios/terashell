@@ -1,7 +1,7 @@
 import os
 import traceback
 
-from config import SHELL_NAME, MAP_WARN_DISABLED_FILE, HISTORY_FILE, HELP_FLAGS
+from config import SHELL_NAME, MAP_WARN_DISABLED_FILE, HELP_FLAGS
 
 
 class ShellCommands:

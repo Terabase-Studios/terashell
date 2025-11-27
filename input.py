@@ -1,13 +1,10 @@
 import os
-from pkgutil import walk_packages
 
 from prompt_toolkit import PromptSession
+from prompt_toolkit.completion import Completer, Completion
+from prompt_toolkit.history import FileHistory
 from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.styles import Style
-from prompt_toolkit.completion import Completer, Completion, WordCompleter
-from prompt_toolkit import PromptSession
-from prompt_toolkit.history import FileHistory
-from prompt_toolkit.formatted_text import ANSI
 
 from config import AUTO_COMPLETE, HISTORY_FILE, PROMPT_HIGHLIGHTING
 from indexer import CommandIndexer

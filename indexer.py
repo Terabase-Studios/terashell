@@ -1,14 +1,16 @@
-import os
-import sys
 import json
+import os
 import re
-from copy import deepcopy
-from pathlib import Path
 import subprocess
-from yaspin import yaspin
+import sys
 import traceback
+from copy import deepcopy
+from itertools import combinations
+from pathlib import Path
 
-from config import HELP_FILE, HELP_FLAGS, PATH_INDEXING, EXTRA_SUB_COMMAND_HEADERS, EXTRA_FLAG_HEADERS, EXTRA_POSITIONAL_HEADERS
+from yaspin import yaspin
+
+from config import HELP_FILE, HELP_FLAGS, PATH_INDEXING, ONE_FLAG_PER_GROUP
 
 
 class CommandIndexer:
@@ -95,7 +97,7 @@ class HelpIndexer:
     # ============================================================
     # Auto-generate help by running the tool
     # ============================================================
-    def map_tool(self, tool_name, base_cmd=None, recursive_depth=1, _depth=0, main=True):
+    def map_tool(self, tool_name, base_cmd=None, recursive_depth=4, main=True, previous_help=None):
         """
         Runs the tool with multiple help flags and harvests its help text.
         Recursively processes subcommands.
@@ -110,6 +112,9 @@ class HelpIndexer:
 
         if not base_cmd:
             base_cmd = [tool_name]
+
+        if recursive_depth and len(base_cmd) >= recursive_depth:
+            return None, None
 
         collected_help = ""
         for flag in HELP_FLAGS:
@@ -131,248 +136,175 @@ class HelpIndexer:
                     stderr=sys.stderr,
                     env={**os.environ, "FORCE_COLOR": "1"},
                 )
-                return
+                return None, None
             except Exception as e:
                 print(traceback.format_exception(e))
                 continue  # skip flags that fail
 
-        if not collected_help:
-            print(f"Unable to find help for \"{tool_name}\"")
-            return  # no help found
+        if (not collected_help) or len(collected_help.splitlines()) < 1:
+            if main:
+                print(f"Unable to find help for \"{tool_name}\"\nThe tool did not return any help text.")
+            return None, None # no help found
 
-        # Update JSON with parsed help
-        full_key = ".".join(base_cmd)
-        self.update_command(full_key, collected_help)
 
-        entry = self.data.get(full_key)
-        if not entry:
-            print(f"Unable to update autocomplete for \"{tool_name}\"")
-            return  # no help found
+        if previous_help == collected_help:
+            return None, None
 
-        if recursive_depth and _depth >= recursive_depth:
-            return
 
-        # Recursively process subcommands
-        for sub in entry.get("subcommands", []):
-            sub_name = sub["name"]
-            sub_base_cmd = base_cmd + [sub_name]
-            # only recurse if we haven't indexed it yet
-            full_sub_key = ".".join(sub_base_cmd)
-            if full_sub_key not in self.data:
-                self.map_tool(tool_name, sub_base_cmd, recursive_depth=recursive_depth, _depth=_depth + 1, main=False)
 
-        self.print_help(tool_name, recursive_depth=recursive_depth)
+        dict = self._parse_help(collected_help)
+        potential_commands = list(set(dict.get("potential_subcommands", [])))
+        options = dict.get("optional", [])
+
+        main_branch = {"command": base_cmd, "options": options, "subcommands": [], "branches": {}}
+        commands = []
+        #print(potential_commands)
+        for command in potential_commands:
+            if command in base_cmd:
+                continue
+            branch, subcommand_help = self.map_tool(command, base_cmd=base_cmd+[command], recursive_depth=recursive_depth, main=False, previous_help=collected_help)
+            if branch and collected_help != subcommand_help:
+                main_branch["branches"][command] = branch
+                commands.append(command)
+
+        main_branch["subcommands"] = commands
+
+        if not main:
+            return main_branch, collected_help
+
+        self.print_ascii_tree(main_branch)
         print("""
-        The preceding output is a fuzzy command representation; 
-        it may be inaccurate but should somewhat work for autocomplete.
+The preceding output is a fuzzy command representation; 
         
-        If you don't see anything after the tool name then 
-        the shell was unable to parse its help message."
+If you don't see anything after the tool name then 
+the shell was unable to parse the tools help message."
         
         """)
-
-
-    def print_help(self, key, indent=0, recursive_depth=1, _depth=0):
-        """
-        Pretty-print a help entry from the autocomplete JSON.
-        data: dict containing all entries
-        key: the specific command to print
-        """
-        if key not in self.data:
-            print("[DISPLAY ERROR] Command not found:", key)
-            return
-
-        entry = self.data[key]
-        spacer = "  " * indent
-        name = key.split(".")[-1]
-
-        # Print command header
-        print(f"{spacer}{name}:\n{spacer}{"-"*(len(name)+1)}")
-
-        # Positional arguments
-        if entry.get("positional"):
-            print(f"{spacer}Positional arguments:")
-            for p in entry["positional"]:
-                print(f"{spacer}  {p}")
-
-        # Optional flags
-        if entry.get("optional"):
-            print(f"{spacer}Options:")
-            for opt in entry["optional"]:
-                flags = ", ".join(opt["flags"])
-                desc = opt.get("desc", "")
-                print(f"{spacer}  {flags:<20} {desc}")
-
-
-        if entry.get("subcommands"):
-            print(f"{spacer}Subcommands:")
-            for sub in entry["subcommands"]:
-                sub_name = sub["name"]
-                sub_desc = sub.get("desc", "")
-                print(f"{spacer}  {sub_name:<15} {sub_desc}")
-
-        # Subcommands
-        if _depth >= recursive_depth:
-            return
-
-        # Recurse into subcommands if they have their own entries
-        for sub in entry.get("subcommands", []):
-            sub_key = f"{key}.{sub['name']}"
-            if sub_key in self.data:
-                print()
-                self.print_help(sub_key, indent=indent + 1, recursive_depth=recursive_depth, _depth=_depth + 1)
-
-
-    def parse_help(
-                self,
-                text: str,
-                extra_headers: list[str] = None,
-                extra_positional_headers: list[str] = None,
-                extra_flag_headers: list[str] = None,
-                extra_subcommand_headers: list[str] = None,
-        ) -> dict:
-            positional = []
-            optional = []
-            subcommands = []
-            sections = {}
-
-            lines = [line.rstrip() for line in text.splitlines()]
-
-            # Default headers
-            positional_headers = ["positional arguments"] + (extra_positional_headers or [])
-            subcommand_headers = ["commands", "command"] + (extra_subcommand_headers or [])
-            flag_headers = [
-                               "options",
-                               "optional arguments",
-                               "general options",
-                               "options (and corresponding environment variables)"
-                           ] + (extra_flag_headers or [])
-
-            all_headers = positional_headers + subcommand_headers + flag_headers
-
-            # Collect lines under each header
-            current_header = None
-
-            # Escape headers for regex
-            escaped_headers = [re.escape(h) for h in all_headers]
-
-            for line in lines:
-                match = re.match(rf'\s*({"|".join(escaped_headers)}):', line, flags=re.I)
-                if match:
-                    current_header = match.group(1).strip()
-                    sections[current_header.lower()] = []
-                elif current_header:
-                    sections[current_header.lower()].append(line)
-
-            # Parse positional arguments
-            pos_section = next((sections[h.lower()] for h in positional_headers if h.lower() in sections), [])
-            for line in pos_section:
-                if "available commands" in line.lower():
-                    continue
-                m = re.match(r'\s*([a-zA-Z0-9_-]+)\s{2,}(.+)', line)
-                if m:
-                    name, _ = m.groups()
-                    positional.append(name)
-
-            # Parse subcommands
-            for section_lines in sections.values():
-                for line in section_lines:
-                    m = re.match(r'\s{2,}([a-zA-Z0-9_-]+)\s{2,}(.+)', line)
-                    if m:
-                        name, desc = m.groups()
-                        if "available commands" not in desc.lower():
-                            subcommands.append({"name": name, "desc": desc.strip()})
-
-            # Parse optional flags
-            for header, lines in sections.items():
-                if any(header.startswith(h.lower()) for h in flag_headers):
-                    current_option = None
-                    for line in lines:
-                        line = line.rstrip()
-
-                        m = re.match(
-                            r'\s*([-\w][-\w, ]*?)'  # flag blob: one or more flags separated by comma or space
-                            r'(?:\s+([A-Z0-9_<>-]+))?'  # optional metavar (captured separately)
-                            r'\s*:\s*(.*)',  # description starts after the first colon
-                            line
-                        )
-
-                        if m:
-                            flag_blob, metavar, desc = m.groups()
-                            flags = [f.strip().split(" ")[0] for f in flag_blob.split(',') if f.strip() and f.strip() != '-']
-                            if flags:
-                                opt = {"flags": flags, "desc": desc.strip()}
-                                if metavar:
-                                    opt["metavar"] = metavar
-                                optional.append(opt)
-                                current_option = opt
-                        else:
-                            # continuation line
-                            if current_option and line.strip():
-                                current_option["desc"] += " " + line.strip()
-                            else:
-                                current_option = None
-
-            # Filter invalid optional flags and positional duplicates
-            optional = [o for o in optional if o["flags"] and o["flags"][0].startswith("-")]
-            positional = [p for p in positional if p not in {s["name"] for s in subcommands}]
-
-            return {
-                "positional": positional,
-                "optional": optional,
-                "subcommands": subcommands,
-                "sections": sections
-            }
-
-
-    # ============================================================
-    # Store or update help data
-    # ============================================================
-    def update_command(self, tool_name, help_text):
-        parsed = self.parse_help(help_text)
-
-        # Detect subcommand help based on tool syntax
-        # Example tool_name: "fts.send"
-        is_sub = "." in tool_name
-
-        if is_sub:
-            # Update only this subcommand entry
-            self.data[tool_name] = parsed
-            self._save()
-            return
-
-        # Parent command update
-        parent = parsed
-
-        # Merge with existing to avoid wiping known subcommands
-        if tool_name not in self.data:
-            self.data[tool_name] = parent
-        else:
-            existing = self.data[tool_name]
-
-            # Merge optional flags
-            # (avoid duplicates, handle new ones)
-            opt_map = {tuple(o["flags"]): o for o in existing["optional"]}
-            for o in parent["optional"]:
-                opt_map[tuple(o["flags"])] = o
-            existing["optional"] = list(opt_map.values())
-
-            # Merge subcommands
-            sub_map = {s["name"]: s for s in existing["subcommands"]}
-            for s in parent["subcommands"]:
-                if s["name"] not in sub_map:
-                    sub_map[s["name"]] = s
-            existing["subcommands"] = list(sub_map.values())
-
+        self.data[tool_name] = main_branch
         self._save()
-        return self.data[tool_name]
+        return main_branch, collected_help
+
+    def print_ascii_tree(self, node, prefix="", is_last=True):
+        # Build connector
+        connector = "└── " if is_last else "├── "
+
+        # Prepare command + options string
+        cmd_path = " ".join(node.get("command", []))
+        options = node.get("options")
+        if options:
+            opts_str = ", ".join([", ".join(opt) for opt in options])
+            line = f"{cmd_path} [{opts_str}]"
+        else:
+            line = cmd_path
+
+        print(f"{prefix}{connector}{line}" if prefix else line)
+
+        # Prepare children prefix
+        children_prefix = prefix + ("    " if is_last else "│   ")
+
+        # Recurse into subcommand branches
+        branches = list(node.get("branches", {}).values())
+        for i, child in enumerate(branches):
+            self.print_ascii_tree(child, prefix=children_prefix, is_last=(i == len(branches) - 1))
+
+
+    def _parse_subcommands(self, text: str) -> list:
+        subcommands = []
+
+        # Format help:
+        lines = []
+        for raw_line in text.splitlines():
+            cleaned_line = re.sub(r'[^\x20-\x7E]', '', raw_line)
+            no_meta_line = cleaned_line.replace("=", " ").replace(":", " ")
+            lines.append(no_meta_line)
+
+        for line in lines:
+            if line.startswith(" "):
+                no_tab_line = line.replace("\t", "").strip(" ")
+                # filter opt args or fragments
+                if no_tab_line.startswith("-") or no_tab_line.startswith("--") or no_tab_line.startswith("/") or no_tab_line.startswith("//") or no_tab_line.startswith("[") or no_tab_line.startswith("{"):
+                    continue
+                try:
+                    subcommand = no_tab_line.split()[0]
+                except IndexError:
+                    subcommand = no_tab_line
+                subcommands.append(subcommand)
+
+        return subcommands
+
+    def _merge_option_groups(self, option_groups):
+        groups = [set(g) for g in option_groups]
+        merged = True
+
+        while merged:
+            merged = False
+            new_groups = []
+            skip = set()
+            for i, j in combinations(range(len(groups)), 2):
+                if i in skip or j in skip:
+                    continue
+                if groups[i] & groups[j]:  # if they share any flag
+                    groups[i] |= groups[j]  # merge
+                    skip.add(j)
+                    merged = True
+            # Rebuild list removing skipped groups
+            groups = [g for idx, g in enumerate(groups) if idx not in skip]
+
+        # Convert sets back to sorted lists
+        return [sorted(list(g)) for g in groups]
+
+    def _parse_optional(self, text: str):
+        optional = []
+
+        # Format help:
+        lines = []
+        for raw_line in text.splitlines():
+            cleaned_line = re.sub(r'[^\x20-\x7E]', '', raw_line)
+            flat_usage_line = cleaned_line.replace("[", "\n").replace("]", "").replace(" |", ",")
+            no_tab_line = flat_usage_line.replace("\t", "").strip(" ")
+            no_meta_line = no_tab_line.replace("=", " ").replace(":", " ")
+            sterilized_line = no_meta_line.rstrip()
+            lines.extend(sterilized_line.split("\n"))
+
+        # Parse optional flags
+        for line in lines:
+            stripped = line.strip()
+
+            # Must start with -, --, or /
+            if not (stripped.startswith("-") or stripped.startswith("--") or stripped.startswith("/")):
+                continue
+
+            # print(line)
+
+            tokens = stripped.split()
+            flag_tokens = []
+            for tok in tokens:
+                if tok.startswith("-") or tok.startswith("--") or tok.startswith("/"):
+                    # Strip trailing commas
+                    cleaned = tok.rstrip(",")
+                    flag_tokens.append(cleaned)
+                else:
+                    break
+
+            grouped_flags = []
+            for tok in flag_tokens:
+                for f in tok.split(","):
+                    f = f.strip()
+                    if f:
+                        grouped_flags.append(f)
+            optional.append(grouped_flags)
+
+        return self._merge_option_groups(optional)
+
+    def _parse_help(self, text: str) -> dict:
+        return {
+            "potential_subcommands": self._parse_subcommands(text),
+            "optional": self._parse_optional(text)
+        }
 
     def _save(self):
         self.json_path.write_text(json.dumps(self.data, indent=2))
 
-    # ============================================================
-    # Suggestion engine
-    # ============================================================
     def get_suggested(self, line):
         tokens = line.strip().split()
         if not tokens:
@@ -386,40 +318,37 @@ class HelpIndexer:
         entry = self.data[tool]
         typed_sub = None
 
-        # Detect subcommand
-        if len(tokens) > 1:
-            candidate = tokens[1]
-            for sub in entry.get("subcommands", []):
-                if candidate == sub["name"]:
-                    typed_sub = candidate
-                    break
-
-        # Switch to subcommand context if exists
-        if typed_sub and f"{tool}.{typed_sub}" in self.data:
-            entry = self.data[f"{tool}.{typed_sub}"]
+        # Recursively walk down subcommands
+        current_entry = entry
+        for token in tokens[1:]:
+            if token in current_entry.get("subcommands", []):
+                typed_sub = token
+                current_entry = current_entry.get("branches", {}).get(token, current_entry)
+            else:
+                break
 
         suggestions = []
 
-        # Suggest subcommands if none typed yet
-        if typed_sub is None:
-            suggestions.extend([s["name"] for s in entry.get("subcommands", [])])
+        # Suggest next subcommands if none typed yet at this level
+        if not typed_sub or tokens[-1] not in current_entry.get("subcommands", []):
+            suggestions.extend(current_entry.get("subcommands", []))
 
-        # Suggest flags while keeping short flags behind long flags
-        for opt in entry.get("optional", []):
-            flags = opt["flags"]
-            if len(flags) == 2 and flags[0].startswith("--") and flags[1].startswith("-"):
-                # long flag first, short flag after
-                suggestions.extend(flags)
-            else:
-                suggestions.extend(flags)
+        # Build a set of flags already used in the line
+        used_flags = set(tokens[1:])
 
-        # add positional arguments or subcommands
-        suggestions.extend(i["name"] for i in entry.get("subcommands", []) if i["name"] not in line.split())
+        # Suggest options per group
+        for group in current_entry.get("options", []):
+            # Only suggest group if none of its flags are used
+            if not any(flag in used_flags for flag in group) or not ONE_FLAG_PER_GROUP:
+                suggestions.extend(group)
 
-        # Prefix filtering
-        pref = tokens[-1]
-        if pref and pref != typed_sub and pref != tool:
-            suggestions = list(set([s for s in suggestions if s.startswith(pref)]))
+        # Filter suggestions by prefix of last token if partial and make sure no duplicate flags if ONE_FLAG_PER_GROUP is False
+        last_token = tokens[-1]
+        if last_token not in (tool, typed_sub):
+            suggestions = [s for s in suggestions if s.startswith(last_token) and s not in used_flags]
+
+        # Deduplicate and sort (shorter flags first)
+        suggestions = sorted(set(suggestions), key=lambda x: (len(x), x), reverse=True)
 
         return {
             "command": tool,

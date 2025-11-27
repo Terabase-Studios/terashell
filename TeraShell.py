@@ -1,10 +1,12 @@
+import os
 import subprocess
 import sys
-import os
 import traceback
-from commands import ShellCommands
-from config import SHELL_NAME
+
 from prompt_toolkit.formatted_text import ANSI
+
+from commands import ShellCommands
+from config import SHELL_NAME, SHOW_USER
 from input import ShellInput
 
 try:
@@ -38,7 +40,8 @@ class MiniShell:
         print(INITIAL_PRINT)
         while self.running:
             try:
-                prefix = ANSI(f"\033[90mTS\033[0m [\033[36m{self.working_dir}\033[0m]:\n\033[90m└> \033[0m")
+                user = f"[\033[36m{os.getlogin()}\033[90m\033[0m]\033[90m-\033[0m" if SHOW_USER else ""
+                prefix = ANSI(f"\033[90mTS-\033[0m{user}[\033[36m{self.working_dir}\033[0m]\033[90m\n└> \033[0m")
                 line = self.input_handler.input(cmd_prefix=prefix)
             except KeyboardInterrupt:
                 print()
