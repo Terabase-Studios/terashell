@@ -2,6 +2,7 @@ import os
 import subprocess
 import sys
 import traceback
+import socket
 
 from prompt_toolkit.formatted_text import ANSI
 
@@ -28,6 +29,10 @@ class MiniShell:
         self.command_handler = ShellCommands(self)
         self.input_handler = ShellInput(self, cmd_prefix=f"TS [ACTIVEDIR]:\n└> ")
         self.working_dir = os.getcwd()
+        self.active_venv = None
+
+        if "VIRTUAL_ENV" in os.environ:
+            self.command_handler._cmd_activate([os.environ.get("VIRTUAL_ENV")])
 
     def run(self, command: str):
         try:
@@ -40,8 +45,9 @@ class MiniShell:
         print(INITIAL_PRINT)
         while self.running:
             try:
-                user = f"[\033[36m{os.getlogin()}\033[90m\033[0m]\033[90m-\033[0m" if SHOW_USER else ""
-                prefix = ANSI(f"\033[90mTS-\033[0m{user}[\033[36m{self.working_dir}\033[0m]\033[90m\n└> \033[0m")
+                venv = f"[\033[36m{self.active_venv}\033[90m\033[0m]\033[90m-\033[0m" if self.active_venv else ""
+                user = f"[\033[36m{os.getlogin()}@{socket.gethostname()}\033[90m\033[0m]\033[90m-\033[0m" if SHOW_USER else ""
+                prefix = ANSI(f"\033[90mTS-\033[0m{venv}{user}[\033[36m{self.working_dir}\033[0m]\033[90m\n└> \033[0m")
                 line = self.input_handler.input(cmd_prefix=prefix)
             except KeyboardInterrupt:
                 print()

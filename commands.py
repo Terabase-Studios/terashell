@@ -1,7 +1,7 @@
 import os
 import traceback
 
-from config import SHELL_NAME, MAP_WARN_DISABLED_FILE, HELP_FLAGS
+from config import SHELL_NAME, MAP_WARN_DISABLED_FILE, HELP_FLAGS, IS_WINDOWS
 
 
 class ShellCommands:
@@ -15,6 +15,8 @@ class ShellCommands:
             "map": self._cmd_map,
             "history": self._cmd_history,
             "history clear": self._cmd_history,
+            "activate": self._cmd_activate,
+            "deactivate": self._cmd_deactivate,
         }
 
         self.help = {
@@ -23,6 +25,8 @@ class ShellCommands:
             "map": f"Run a tool and its commands recursively and add/update autocompletion.",
             "history": "See all previous inputs.",
             "history clear": "Clear input history.",
+            "activate": "Activate a Python virtual environment.",
+            "deactivate": "Deactivate the current virtual environment.",
         }
 
         self.command_list = list(self.commands.keys())
@@ -57,7 +61,7 @@ class ShellCommands:
         print()
         header = f" Modified commands:"
         print(header, "\n", "-" * len(header))
-        print("\t", ", ".join([i for i in self.get_commands() if i not in list(self.help.keys())]))
+        print(" ", ", ".join([i for i in self.get_commands() if i not in list(self.help.keys())]))
 
 
     def _cmd_exit(self, args):
@@ -95,3 +99,49 @@ class ShellCommands:
             self.shell.input_handler.print_history()
         elif args[0] == "clear":
             self.shell.input_handler.clear_history()
+
+    def _cmd_activate(self, args):
+        if not args:
+            print("Usage: activate <path>")
+            return
+
+        path = os.path.abspath(args[0])
+
+        # figure out bin/Scripts
+        if IS_WINDOWS:
+            bindir = os.path.join(path, "Scripts")
+            python_exe = os.path.join(bindir, "python.exe")
+        else:
+            bindir = os.path.join(path, "bin")
+            python_exe = os.path.join(bindir, "python")
+
+        if not os.path.exists(python_exe):
+            print(f"Not a valid virtual environment: {path}\nCould not find python in {python_exe}\nPlease provide path to root of venv directory.\nExample: activate venv")
+            return
+
+        # update environment
+        os.environ["VIRTUAL_ENV"] = path
+        os.environ["PATH"] = bindir + os.pathsep + os.environ["PATH"]
+
+        # store it in shell instance for prompt use
+        self.shell.active_venv = os.path.basename(path)
+
+
+    def _cmd_deactivate(self, args):
+        if "VIRTUAL_ENV" not in os.environ:
+            print("No active venv to deactivate")
+            return
+
+        venv = os.environ.pop("VIRTUAL_ENV")
+
+        # Remove venv bin path from PATH
+        if os.name == "nt":
+            bindir = os.path.join(venv, "Scripts")
+        else:
+            bindir = os.path.join(venv, "bin")
+
+        paths = os.environ["PATH"].split(os.pathsep)
+        paths = [p for p in paths if p != bindir]
+        os.environ["PATH"] = os.pathsep.join(paths)
+
+        self.shell.active_venv = None
