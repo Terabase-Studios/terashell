@@ -3,11 +3,10 @@ import subprocess
 import sys
 import traceback
 import socket
-
 from prompt_toolkit.formatted_text import ANSI
 
 from commands import ShellCommands
-from config import SHELL_NAME, SHOW_USER
+from config import SHELL_NAME, SHOW_USER, IS_UNIX
 from input import ShellInput
 
 try:
@@ -22,6 +21,22 @@ Welcome to Terashell!
 type 't?' to see a list of added commands!
 """
 
+RESET = "\033[0m"
+RED = "\033[31m"
+CYAN = "\033[36m"
+WHITE = "\033[37m"
+BRIGHT_BLACK = "\033[90m"
+DARK_RED = "\033[38;2;139;0;0m"
+
+def get_current_user():
+    if IS_UNIX:
+        try:
+            import pwd
+            return pwd.getpwuid(os.geteuid()).pw_name
+        except Exception:
+            return os.environ.get("USER", "unknown")
+    else:  # Windows
+        return os.environ.get("USERNAME", "unknown")
 
 class MiniShell:
     def __init__(self):
@@ -45,9 +60,13 @@ class MiniShell:
         print(INITIAL_PRINT)
         while self.running:
             try:
-                venv = f"[\033[36m{self.active_venv}\033[90m\033[0m]\033[90m-\033[0m" if self.active_venv else ""
-                user = f"[\033[36m{os.getlogin()}@{socket.gethostname()}\033[90m\033[0m]\033[90m-\033[0m" if SHOW_USER else ""
-                prefix = ANSI(f"\033[90mTS-\033[0m{venv}{user}[\033[36m{self.working_dir}\033[0m]\033[90m\n└> \033[0m")
+                user = get_current_user()
+                MAIN_COLOR = CYAN if user != "root" else RED
+                BACK_COLOR = BRIGHT_BLACK if user != "root" else DARK_RED
+                venv = f"[{MAIN_COLOR}{self.active_venv}{BACK_COLOR}{RESET}]{BACK_COLOR}-{RESET}" if self.active_venv else ""
+                user = f"[{MAIN_COLOR}{user}@{socket.gethostname()}{BACK_COLOR}{RESET}]{BACK_COLOR}-{RESET}" if SHOW_USER else ""
+                prefix = ANSI(f"{BACK_COLOR}TS-{RESET}{venv}{user}[{MAIN_COLOR}{self.working_dir}{RESET}]{BACK_COLOR}\n"
+                              f"└> {RESET}")
                 line = self.input_handler.input(cmd_prefix=prefix)
             except KeyboardInterrupt:
                 print()

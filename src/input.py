@@ -77,29 +77,40 @@ class ShellLexer(Lexer):
                 full_path = os.path.expanduser(word)
                 if not os.path.isabs(full_path):
                     full_path = os.path.join(cwd, full_path)
+                try:
+                    path_exists = os.path.exists(full_path)
+                    path_partial = (path_exists or any(
+                        f.startswith(os.path.basename(full_path))
+                        for f in (os.listdir(os.path.dirname(full_path)) if os.path.exists(os.path.dirname(full_path)) else [])
+                    ))
 
-                if word.startswith("$"):
-                    tokens.append(('class:env_var', word))
-                # Partial path exists check: highlight even if only partially typed
-                elif os.path.exists(full_path) or any(
-                    f.startswith(os.path.basename(full_path))
-                    for f in (os.listdir(os.path.dirname(full_path)) if os.path.exists(os.path.dirname(full_path)) else [])
-                ):
-                    if '\\' in word or '/' in word:
-                        tokens.append(('class:path', word))
+                    if word.startswith("$"):
+                        tokens.append(('class:env_var', word))
+                    # Partial path exists check: highlight even if only partially typed
+                    elif path_exists or path_partial:
+                        if '\\' in word or '/' in word:
+                            if path_exists:
+                                tokens.append(('class:path_complete', word))
+                            else:
+                                tokens.append(('class:path', word))
+                        else:
+                            if path_exists and word != "." and word != "..":
+                                tokens.append(('class:file_complete', word))
+                            else:
+                                tokens.append(('class:file', word))
+                    elif word.replace(".", "").isdigit():
+                        tokens.append(('class:digit', word))
+                    elif word.startswith('-'):
+                        tokens.append(('class:optional', word))
+                    elif i == 0:
+                        if word in self.shell.command_handler.get_commands():
+                            tokens.append(('class:built_in', word))
+                        else:
+                            tokens.append(('class:command', word))
                     else:
-                        tokens.append(('class:file', word))
-                elif word.replace(".", "").isdigit():
-                    tokens.append(('class:digit', word))
-                elif word.startswith('-'):
-                    tokens.append(('class:optional', word))
-                elif i == 0:
-                    if word in self.shell.command_handler.get_commands():
-                        tokens.append(('class:built_in', word))
-                    else:
-                        tokens.append(('class:command', word))
-                else:
-                    tokens.append(('class:arg', word))
+                        tokens.append(('class:arg', word))
+                except Exception:
+                    tokens.append(('class:error', word))
                 tokens.append(('', ' '))  # add space back
             return tokens
 
@@ -113,8 +124,11 @@ style = Style.from_dict({
     'optional': '#808080',
     'path': 'ansicyan',
     'file': 'ansiwhite',
+    'path_complete': 'underline ansicyan',
+    'file_complete': 'underline ansiwhite',
     'env_var': 'ansigreen',
-    'built_in': 'ansigreen'
+    'built_in': 'ansigreen',
+    'error': 'ansired',
 })
 
 # Shell input
@@ -162,7 +176,8 @@ class ShellInput:
         return command
 
     def print_history(self):
-        print("\n".join(self.history.get_strings()))
+        for i, line  in enumerate(self.history.get_strings()):
+            print(f"{i}: {line}")
 
     def clear_history(self):
         # wipe the file

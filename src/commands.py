@@ -1,7 +1,13 @@
 import os
 import traceback
+from yaspin import yaspin
 
 from config import SHELL_NAME, MAP_WARN_DISABLED_FILE, HELP_FLAGS, IS_WINDOWS
+
+
+RED = "\033[91m"
+BOLD = "\033[1m"
+RESET = "\033[0m"
 
 
 class ShellCommands:
@@ -92,7 +98,8 @@ class ShellCommands:
                 return
 
         # execute the original behavior
-        self.shell.input_handler.indexer.help_indexer.map_tool(args[0])
+        with yaspin(text="Mapping tool: ", color="green", ) as spinner:
+            self.shell.input_handler.indexer.help_indexer.map_tool(args[0])
 
     def _cmd_history(self, args):
         if not args:
@@ -116,7 +123,10 @@ class ShellCommands:
             python_exe = os.path.join(bindir, "python")
 
         if not os.path.exists(python_exe):
-            print(f"Not a valid virtual environment: {path}\nCould not find python in {python_exe}\nPlease provide path to root of venv directory.\nExample: activate venv")
+            print(f"{BOLD}{RED}Did not find a valid virtual environment: {path}{RESET}\n"
+                  f"{RED}Could not find python in {python_exe}{RESET}\n"
+                  "Please provide path to root of venv directory.\n"
+                  "Example: activate venv")
             return
 
         # update environment
