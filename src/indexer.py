@@ -4,13 +4,14 @@ import re
 import subprocess
 import sys
 import traceback
+import tempfile
 from copy import deepcopy
 from itertools import combinations
 from pathlib import Path
 
 from yaspin import yaspin
 
-from config import HELP_FILE, HELP_FLAGS, PATH_INDEXING, ONE_FLAG_PER_GROUP
+from config import HELP_FILE, HELP_FLAGS, PATH_INDEXING, ONE_FLAG_PER_GROUP, IS_UNIX
 
 
 class CommandIndexer:
@@ -94,6 +95,48 @@ class HelpIndexer:
             except Exception:
                 self.data = {}
 
+    def _get_help(self, base_cmd, flag):
+        cmd_list = base_cmd + [flag]
+
+        if IS_UNIX:
+            # Use pty to emulate a terminal for programs that detect TTY
+            import pty
+            master_fd, slave_fd = pty.openpty()
+            try:
+                proc = subprocess.Popen(
+                    cmd_list,
+                    stdout=slave_fd,
+                    stderr=subprocess.STDOUT,
+                    env={**os.environ, "FORCE_COLOR": "1"},
+                    text=True
+                )
+                os.close(slave_fd)
+                output = b""
+                while True:
+                    try:
+                        data = os.read(master_fd, 1024)
+                        if not data:
+                            break
+                        output += data
+                    except OSError:
+                        break
+                proc.wait(timeout=2)
+                return output.decode(errors="ignore")
+            finally:
+                os.close(master_fd)
+
+        else:
+            # Windows or other non-UNIX systems
+            result = subprocess.run(
+                cmd_list,
+                capture_output=True,
+                text=True,
+                timeout=2
+            )
+            return result.stdout if result.stdout else None
+
+
+
     # ============================================================
     # Auto-generate help by running the tool
     # ============================================================
@@ -119,14 +162,8 @@ class HelpIndexer:
         collected_help = ""
         for flag in HELP_FLAGS:
             try:
-                result = subprocess.run(
-                    base_cmd + [flag],
-                    capture_output=True,
-                    text=True,
-                    timeout=2
-                )
-                if result.returncode == 0 or result.stdout:
-                    collected_help = result.stdout
+                collected_help = self._get_help(base_cmd, flag)
+                if collected_help and len(collected_help.splitlines()) > 5:
                     break
             except FileNotFoundError:
                 result = subprocess.run(
@@ -147,7 +184,7 @@ class HelpIndexer:
             return None, None # no help found
 
 
-        if previous_help == collected_help:
+        if not collected_help or len(collected_help.splitlines()) <= 5 or previous_help == collected_help:
             return None, None
 
 
@@ -172,23 +209,44 @@ class HelpIndexer:
         if not main:
             return main_branch, collected_help
 
-        self.print_ascii_tree(main_branch)
-        print("""
-The preceding output is a fuzzy command representation; 
-        
-If you don't see anything after the tool name then 
-the shell was unable to parse the tools help message."
-        
-        """)
-        self.data[tool_name] = main_branch
-        self._save()
+        def print_block(text):
+            # Normalize text to lines
+            lines = text.rstrip("\n").split("\n")
+            width = max(len(line) for line in lines)
+            border = "-" * width
+
+            print(border)
+            for line in lines:
+                print(line)
+            print(border)
+
+        print("\n")
+
+        if commands or options:
+            content = []
+            content.append("Command Tree:\n")
+            display_branch = deepcopy(main_branch)
+            display_branch["command"] = base_cmd + ["+"]
+            content.append(
+                self.get_ascii_tree(display_branch))  # you need a method returning the tree as a string
+            block_text = "\n".join(content)
+
+            print_block(block_text)
+            print("\nThe above output is a fuzzy command representation\nand may not be accurate or complete.")
+            self.data[tool_name] = main_branch
+            self._save()
+        else:
+            print_block("Main Help Page Found:\n\n" + collected_help.rstrip("\n"))
+
+            print("\nThe shell could not parse the above output")
         return main_branch, collected_help
 
-    def print_ascii_tree(self, node, prefix="", is_last=True):
+    def get_ascii_tree(self, node, prefix="", is_last=True):
+        lines = []
+
         # Build connector
         connector = "└── " if is_last else "├── "
 
-        # Prepare command + options string
         cmd_path = " ".join(node.get("command", []))
         options = node.get("options")
         if options:
@@ -197,23 +255,46 @@ the shell was unable to parse the tools help message."
         else:
             line = cmd_path
 
-        print(f"{prefix}{connector}{line}" if prefix else line)
+        if prefix:
+            lines.append(f"{prefix}{connector}{line}")
+        else:
+            lines.append(line)
 
-        # Prepare children prefix
-        children_prefix = prefix + ("    " if is_last else "│   ")
+        child_prefix = prefix + ("    " if is_last else "│   ")
 
-        # Recurse into subcommand branches
         branches = list(node.get("branches", {}).values())
         for i, child in enumerate(branches):
-            self.print_ascii_tree(child, prefix=children_prefix, is_last=(i == len(branches) - 1))
+            child_str = self.get_ascii_tree(
+                child,
+                prefix=child_prefix,
+                is_last=(i == len(branches) - 1)
+            )
+            lines.append(child_str)
 
+        return "\n".join(lines)
 
     def _parse_subcommands(self, text: str) -> list:
+        def flatten_set(text, indent="    "):
+            # Extract the contents inside the braces
+            match = re.search(r'\{(.*)\}', text, re.DOTALL)
+            if not match:
+                return text  # no braces found, return original
+
+            content = match.group(1)
+
+            # Split by | and remove whitespace/newlines
+            items = [item.strip() for item in content.split('|') if item.strip()]
+
+            # Reconstruct as an indented list
+            flattened = "\n".join(f"{indent}{item}" for item in items).replace("{", "\n\t")
+            return flattened + text
+
         subcommands = []
 
         # Format help:
         lines = []
-        for raw_line in text.splitlines():
+
+        for raw_line in flatten_set(text).splitlines():
             cleaned_line = re.sub(r'[^\x20-\x7E]', '', raw_line)
             no_meta_line = cleaned_line.replace("=", " ").replace(":", " ")
             lines.append(no_meta_line)
@@ -263,7 +344,8 @@ the shell was unable to parse the tools help message."
             flat_usage_line = cleaned_line.replace("[", "\n").replace("]", "").replace(" |", ",")
             no_tab_line = flat_usage_line.replace("\t", "").strip(" ")
             no_meta_line = no_tab_line.replace("=", " ").replace(":", " ")
-            sterilized_line = no_meta_line.rstrip()
+            less_fake_line = no_meta_line.replace("[-]", "")
+            sterilized_line = less_fake_line.rstrip()
             lines.extend(sterilized_line.split("\n"))
 
         # Parse optional flags

@@ -9,7 +9,7 @@ set "ALL_USERS_TARGET=%ProgramFiles%\TeraShell"
 set "SRC_DIR=%~dp0\.."  REM assuming installer is in scripts\ folder
 set "REQUIREMENTS=%SRC_DIR%\requirements.txt"
 set "PYTHON_MAJOR_REQ=3"
-set "PYTHON_MINOR_REQ=11"
+set "PYTHON_MINOR_REQ=9"
 
 REM -------------------------
 REM Ask installation scope

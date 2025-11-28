@@ -45,6 +45,7 @@ class MiniShell:
         self.input_handler = ShellInput(self, cmd_prefix=f"TS [ACTIVEDIR]:\n└> ")
         self.working_dir = os.getcwd()
         self.active_venv = None
+        self.active_venv_version = None
 
         if "VIRTUAL_ENV" in os.environ:
             self.command_handler._cmd_activate([os.environ.get("VIRTUAL_ENV")])
@@ -63,7 +64,7 @@ class MiniShell:
                 user = get_current_user()
                 MAIN_COLOR = CYAN if user != "root" else RED
                 BACK_COLOR = BRIGHT_BLACK if user != "root" else DARK_RED
-                venv = f"[{MAIN_COLOR}{self.active_venv}{BACK_COLOR}{RESET}]{BACK_COLOR}-{RESET}" if self.active_venv else ""
+                venv = f"[{MAIN_COLOR}{self.active_venv_version}@{self.active_venv}{BACK_COLOR}{RESET}]{BACK_COLOR}-{RESET}" if self.active_venv else ""
                 user = f"[{MAIN_COLOR}{user}@{socket.gethostname()}{BACK_COLOR}{RESET}]{BACK_COLOR}-{RESET}" if SHOW_USER else ""
                 prefix = ANSI(f"{BACK_COLOR}TS-{RESET}{venv}{user}[{MAIN_COLOR}{self.working_dir}{RESET}]{BACK_COLOR}\n"
                               f"└> {RESET}")

@@ -5,7 +5,7 @@ set -e
 # Configuration
 # -------------------------
 MIN_PYTHON_MAJOR=3
-MIN_PYTHON_MINOR=11
+MIN_PYTHON_MINOR=9
 
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 SRC_DIR="$SCRIPT_DIR/.."   # TeraShell root

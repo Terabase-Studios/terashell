@@ -133,9 +133,17 @@ class ShellCommands:
         os.environ["VIRTUAL_ENV"] = path
         os.environ["PATH"] = bindir + os.pathsep + os.environ["PATH"]
 
-        # store it in shell instance for prompt use
+        # store it in shell instance
         self.shell.active_venv = os.path.basename(path)
 
+        # get Python version inside venv
+        try:
+            import subprocess
+            result = subprocess.run([python_exe, "--version"], capture_output=True, text=True)
+            version =  result.stdout.strip() if result.stdout else result.stderr.strip()
+            self.shell.active_venv_version = version.removeprefix("Python ") if  "3.1" in version else "UNKNOWN"
+        except Exception as e:
+            self.shell.active_venv_version = "unknown"
 
     def _cmd_deactivate(self, args):
         if "VIRTUAL_ENV" not in os.environ:
