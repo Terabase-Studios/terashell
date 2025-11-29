@@ -1,9 +1,13 @@
 import os
+import sys
+import json
+import subprocess
 import traceback
 from yaspin import yaspin
 
-from config import SHELL_NAME, MAP_WARN_DISABLED_FILE, HELP_FLAGS, IS_WINDOWS
-
+from config import SHELL_NAME, MAP_WARN_DISABLED_FILE, HELP_FLAGS, IS_WINDOWS, INSTANCE_FILE, INSTR_FILE, INDIVIDUAL_INSTR_FOR_EACH_INSTANCE, IS_UNIX
+from instructions import InstructionHelper
+from emergency import fallback
 
 RED = "\033[91m"
 BOLD = "\033[1m"
@@ -16,6 +20,7 @@ class ShellCommands:
 
         self.commands = {
             "t?": self._cmd_help,
+            "f": self._cmd_critical,
             "exit": self._cmd_exit,
             "cd": self._cmd_cd,
             "map": self._cmd_map,
@@ -23,16 +28,35 @@ class ShellCommands:
             "history clear": self._cmd_history,
             "activate": self._cmd_activate,
             "deactivate": self._cmd_deactivate,
+            "nest list": self._cmd_nest_list,
+            "nest": self._cmd_nest,
+            "instr add": self._cmd_instr,
+            "instr remove": self._cmd_instr,
+            "instr list": self._cmd_instr,
+            "instr save": self._cmd_instr,
+            "instr clear": self._cmd_instr,
+            "instr add-last": self._cmd_instr,
+            "instr": self._cmd_instr,
         }
 
         self.help = {
             "t?": f"See {SHELL_NAME} commands.",
-            "exit": f"Exit {SHELL_NAME} and return to original command line.",
+            "f": f"Fall back to another shell on Unix. Restart on Windows",
+            "exit": f"Exit the current {SHELL_NAME} instance.",
             "map": f"Run a tool and its commands recursively and add/update autocompletion.",
             "history": "See all previous inputs.",
             "history clear": "Clear input history.",
-            "activate": "Activate a Python virtual environment.",
+            "activate": "Usage: \"activate <venv>\" Activate a Python virtual environment.",
             "deactivate": "Deactivate the current virtual environment.",
+            "nest": "Usage: \"nest <shell>\" Open a shell sub-instance with different saved data",
+            "nest list": "list all shell sub-instances",
+            "instr add": "Add a new instruction step.",
+            "instr add-last": "Save the last executed command as an instruction.",
+            "instr list": "List all instruction steps.",
+            "instr save": "Usage: \"instr save <file>\" Save instructions to a markdown file.",
+            "instr remove": "Remove the most recent instruction step.",
+            "instr clear": "Clear all instruction steps.",
+
         }
 
         self.command_list = list(self.commands.keys())
@@ -74,17 +98,22 @@ class ShellCommands:
         self.shell.running = False
 
     def _cmd_cd(self, args):
-        if not args:
-            # default to home directory
-            new_dir = os.path.expanduser("~")
-        else:
-            new_dir = os.path.join(self.shell.working_dir, args[0])
+        previous_dir = self.shell.working_dir
+        try:
+            if not args:
+                # default to home directory
+                new_dir = os.path.expanduser("~")
+            else:
+                new_dir = os.path.join(self.shell.working_dir, " ".join(args).strip("\"\'"))
 
-        if os.path.isdir(new_dir):
-            self.shell.working_dir = os.path.abspath(new_dir)
-            os.chdir(self.shell.working_dir)  # update Python process cwd
-        else:
-            print(f"{SHELL_NAME}: cd: no such directory: {args[0]}")
+            if os.path.isdir(new_dir):
+                self.shell.working_dir = os.path.abspath(new_dir)
+                os.chdir(self.shell.working_dir)  # update Python process cwd
+            else:
+                print(f"{SHELL_NAME}: cd: no such directory: {" ".join(args).strip("\"\'")}")
+        except Exception as e:
+            self.shell.working_dir = previous_dir
+            print(e)
 
     def _cmd_map(self, args):
         if not os.path.exists(MAP_WARN_DISABLED_FILE):
@@ -141,7 +170,7 @@ class ShellCommands:
             import subprocess
             result = subprocess.run([python_exe, "--version"], capture_output=True, text=True)
             version =  result.stdout.strip() if result.stdout else result.stderr.strip()
-            self.shell.active_venv_version = version.removeprefix("Python ") if  "3.1" in version else "UNKNOWN"
+            self.shell.active_venv_version = version.removeprefix("Python ") if  "3." in version else None
         except Exception as e:
             self.shell.active_venv_version = "unknown"
 
@@ -163,3 +192,78 @@ class ShellCommands:
         os.environ["PATH"] = os.pathsep.join(paths)
 
         self.shell.active_venv = None
+
+    def _cmd_nest(self, args):
+        if not args:
+            print("Usage: nest <shell>")
+            return
+
+        if " ".join(args).strip() == "list":
+            self._cmd_nest_list(args)
+            return
+
+        self.shell.run(f"{sys.executable} {self.shell.shell_file} --instance {" ".join(args)}")
+
+    def _cmd_nest_list(self, args):
+        try:
+            instances = json.load(open(INSTANCE_FILE))
+        except Exception:
+            return
+        for i, instance in enumerate(instances):
+            print(f"{i+1}: {instance}")
+
+    def _cmd_instr(self, args):
+        if not args:
+            print("Usage: instr <cmd>")
+            return
+        sub = args[0]
+        if not hasattr(self, "instr_helper"):
+            from TeraShell import instance_file
+            file = instance_file(self.shell.instance, INSTR_FILE) if INDIVIDUAL_INSTR_FOR_EACH_INSTANCE else INSTR_FILE
+            self.instr_helper = InstructionHelper(file)
+
+        if sub == "add":
+            text = " ".join(args[1:])
+            if text:
+                self.instr_helper.add(text)
+                print(f"Added step: {text}")
+
+        if sub == "remove":
+            text = self.instr_helper.remove()
+            print(f"Removed step: {text}")
+
+        elif sub == "list":
+            print(self.instr_helper.list())
+
+        elif sub == "save":
+            filename = args[1]
+            filename = os.path.expanduser(os.path.expandvars(filename))
+            if not os.path.isabs(filename):
+                filename = os.path.join(self.shell.working_dir, filename)
+            filename = os.path.normpath(filename)
+            success = self.instr_helper.save_markdown(filename)
+            if success:
+                print(f"Saved to {filename}")
+            else:
+                print(f"Failed to save to {filename}")
+
+        elif sub == "clear":
+            self.instr_helper.clear()
+            print("Cleared instructions")
+
+        elif sub == "add-last":
+            last = self.shell.input_handler.get_history()[-1]
+
+            if not last:
+                print("No last command to save")
+            else:
+                last = f"run: {last}"
+                self.instr_helper.add(f"{last}\n")
+                print(f"Saved last command as instruction:\n{last}")
+
+    def _cmd_critical(self, args):
+        main = sys.modules["__main__"]
+        main.times_critical = 999999
+        main.warn = False
+        raise Exception("Forced critical error")
+

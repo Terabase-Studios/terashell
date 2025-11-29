@@ -2,13 +2,17 @@ import os.path
 from os import makedirs
 import sys
 
-SHELL_NAME = "terashell"
+SHELL_NAME = "TeraShell"
 
 # Cache files
 APP_DIR = os.path.expanduser(f"~/.{SHELL_NAME}")
 makedirs(APP_DIR, exist_ok=True)
 HISTORY_FILE = os.path.join(APP_DIR, "history")
 HELP_FILE = os.path.join(APP_DIR, "cmd_help.json")
+INSTANCE_FILE = os.path.join(APP_DIR, "instances.json")
+INSTR_FILE = os.path.join(APP_DIR, "instructions.json")
+
+
 
 # Waved warning files
 DISABLED_WARN_DIR = os.path.join(APP_DIR, "disabled_warn_files")
@@ -20,6 +24,7 @@ PROMPT_HIGHLIGHTING = True
 # For Auto Complete
 AUTO_COMPLETE = True
 ONE_FLAG_PER_GROUP = True
+ALWAYS_SUGGEST_HISTORY = False
 
 # For Indexing
 PATH_INDEXING = True
@@ -27,6 +32,7 @@ HELP_FLAGS = ["-h", "--help", "/?", "help"]  # common help flags
 
 #Other
 SHOW_USER = True
+INDIVIDUAL_INSTR_FOR_EACH_INSTANCE = True
 
 # Get os
 IS_WINDOWS = sys.platform.startswith("win")

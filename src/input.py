@@ -6,8 +6,60 @@ from prompt_toolkit.history import FileHistory
 from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.styles import Style
 
-from config import AUTO_COMPLETE, HISTORY_FILE, PROMPT_HIGHLIGHTING
+from config import AUTO_COMPLETE, HISTORY_FILE, PROMPT_HIGHLIGHTING, ALWAYS_SUGGEST_HISTORY
 from indexer import CommandIndexer
+import shlex
+
+def clean_path(path, working_dir):
+    no_quotes = path.strip("\"\'")
+    no_long_path = no_quotes.removeprefix(working_dir)
+    if not no_long_path == no_quotes:
+        no_starting_slash = no_long_path.lstrip("\\/")
+    else:
+        no_starting_slash = no_long_path
+
+    if any(ch in no_starting_slash for ch in ' \t\n"\''):
+        proper_path = f"\"{no_starting_slash}\""
+    else:
+        proper_path = no_starting_slash
+    return proper_path
+
+def complete_path(text_before_cursor, ignore_case=False, working_dir=None):
+    text_expanded = os.path.expanduser(text_before_cursor)
+
+    # Split into directory and file prefix
+    dir_part, file_part = os.path.split(text_expanded)
+
+    # Handle Windows drive letters
+    if len(dir_part) == 2 and dir_part[1] == ":":
+        dir_part += os.sep
+
+    # If relative, join with shell working dir
+    if not os.path.isabs(dir_part):
+        if working_dir:
+            dir_part = os.path.join(working_dir, dir_part)
+        else:
+            dir_part = os.path.abspath(dir_part)
+
+    # Only try to list if dir exists
+    if not os.path.isdir(dir_part):
+        return
+
+    try:
+        entries = os.listdir(dir_part)
+    except (FileNotFoundError, PermissionError):
+        entries = []
+
+    for entry in entries:
+        if ignore_case:
+            match = entry.lower().startswith(file_part.lower())
+        else:
+            match = entry.startswith(file_part)
+        if match:
+            completion_path = os.path.join(dir_part, entry)
+            if os.path.isdir(completion_path):
+                completion_path += os.sep
+            yield Completion(clean_path(completion_path, working_dir), start_position=-len(file_part))
 
 
 class CommandCompleter(Completer):
@@ -16,10 +68,11 @@ class CommandCompleter(Completer):
     then uses HelpIndexer for subcommands and flags.
     """
 
-    def __init__(self, command_indexer, extra_commands = [], ignore_case=True):
-        self.help_indexer = command_indexer
+    def __init__(self, input_handler, extra_commands = [], ignore_case=True):
+        self.input_handler = input_handler
+        self.help_indexer = input_handler.indexer
         self.ignore_case = ignore_case
-        self.commands = sorted(command_indexer.get_commands() + extra_commands)  # top-level commands
+        self.commands = sorted(self.help_indexer.get_commands() + extra_commands)  # top-level commands
 
     def get_completions(self, document, complete_event):
         text_before_cursor = document.text_before_cursor
@@ -40,6 +93,10 @@ class CommandCompleter(Completer):
                 else:
                     if cmd_name.startswith(first_word):
                         yield Completion(cmd_name, start_position=start_pos)
+            # --- Add filesystem path completion ---
+            for c in complete_path(text_before_cursor, ignore_case=self.ignore_case,
+                                   working_dir=self.input_handler.shell.working_dir):
+                yield Completion(c.text, start_position=start_pos)
             return  # don't try subcommands/flags yet
 
         # --- Subcommands/flags completion ---
@@ -49,15 +106,46 @@ class CommandCompleter(Completer):
 
         last_token = tokens[-1]
         start_pos = -len(last_token)
+        found_suggestion = False
+
+        # --- Add filesystem path completion ---
+        last_token = tokens[-1]
+        start_pos = -len(last_token)
+        for c in complete_path(last_token, ignore_case=self.ignore_case,
+                               working_dir=self.input_handler.shell.working_dir):
+            found_suggestion = True
+            yield Completion(c.text, start_position=start_pos)
 
         for s in suggestions:
             if self.ignore_case:
                 if s.lower().startswith(last_token.lower()):
+                    found_suggestion = True
                     yield Completion(s, start_position=start_pos)
             else:
                 if s.startswith(last_token):
+                    found_suggestion = True
                     yield Completion(s, start_position=start_pos)
 
+        for s in self.input_handler.shell.command_handler.get_commands():
+            if self.ignore_case:
+                if s.lower().startswith(text_before_cursor.lower()):
+                    found_suggestion = True
+                    yield Completion(s, start_position=-len(text_before_cursor))
+            else:
+                if s.startswith(text_before_cursor):
+                    found_suggestion = True
+                    yield Completion(s, start_position=-len(text_before_cursor))
+
+        if not found_suggestion or ALWAYS_SUGGEST_HISTORY:
+            for s in list(set(self.input_handler.get_history())):
+                # Handle case-insensitive option
+                if self.ignore_case:
+                    if s.lower().startswith(text_before_cursor.lower()):
+                        # Replace everything typed so far
+                        yield Completion(s, start_position=-len(text_before_cursor))
+                else:
+                    if s.startswith(text_before_cursor):
+                        yield Completion(s, start_position=-len(text_before_cursor))
 
 # Lexer with live path highlighting
 class ShellLexer(Lexer):
@@ -70,11 +158,27 @@ class ShellLexer(Lexer):
 
         def get_line(lineno):
             tokens = []
-            words = text.split()
+            current = []
+            in_quotes = False
+
+            words = text.split(" ")
 
             for i, word in enumerate(words):
+                if word.startswith(("'", '"')) and not in_quotes:
+                    in_quotes = True
+                    current.append(word)
+                    continue
+                if in_quotes:
+                    current.append(word)
+                    # check if this word ends with a quote (same type as opening)
+                    if word.endswith(("'", '"')):
+                        tokens.append(('class:quotes', ' '.join(current)))
+                        current = []
+                        in_quotes = False
+                    continue
+
                 # Expand ~ and resolve relative paths
-                full_path = os.path.expanduser(word)
+                full_path = os.path.expanduser(word.strip("\'\""))
                 if not os.path.isabs(full_path):
                     full_path = os.path.join(cwd, full_path)
                 try:
@@ -112,6 +216,8 @@ class ShellLexer(Lexer):
                 except Exception:
                     tokens.append(('class:error', word))
                 tokens.append(('', ' '))  # add space back
+            if current:
+                tokens.append(('class:quotes', ' '.join(current)))
             return tokens
 
         return get_line
@@ -129,20 +235,21 @@ style = Style.from_dict({
     'env_var': 'ansigreen',
     'built_in': 'ansigreen',
     'error': 'ansired',
+    'quotes': 'italic ansicyan'
 })
 
 # Shell input
 class ShellInput:
-    def __init__(self, shell, cmd_prefix="NoPrefixFound!> "):
+    def __init__(self, shell, cmd_prefix="NoPrefixFound!> ", history_file=HISTORY_FILE):
         self.shell = shell
         self.indexer = CommandIndexer(index_path=AUTO_COMPLETE)
 
         # Use FileHistory for persistent history
-        self.history = FileHistory(HISTORY_FILE)
+        self.history = FileHistory(history_file)
 
         if AUTO_COMPLETE:
             completer = CommandCompleter(
-                self.indexer,
+                self,
                 extra_commands=self.shell.command_handler.get_commands(),
                 ignore_case=True
             )
@@ -177,7 +284,10 @@ class ShellInput:
 
     def print_history(self):
         for i, line  in enumerate(self.history.get_strings()):
-            print(f"{i}: {line}")
+            print(f"{i+1}: {line}")
+
+    def get_history(self):
+        return self.history.get_strings()
 
     def clear_history(self):
         # wipe the file
@@ -189,7 +299,7 @@ class ShellInput:
 
         if AUTO_COMPLETE:
             completer = CommandCompleter(
-                self.indexer,
+                self,
                 extra_commands=self.shell.command_handler.get_commands(),
                 ignore_case=True
             )

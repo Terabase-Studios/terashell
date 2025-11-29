@@ -37,11 +37,34 @@ if "%scope_choice%"=="1" (
 )
 
 REM -------------------------
-REM Ask about adding to PATH
+REM Add to PATH
 REM -------------------------
-set /p add_path=Do you want to add TeraShell to your PATH? [y/N]:
-set "ADD_PATH=%add_path:~0,1%"
-if /i not "%ADD_PATH%"=="y" set "ADD_PATH=n"
+if /i "%ADD_PATH%"=="y" (
+    echo [*] Updating PATH...
+
+    REM Read the current PATH depending on scope
+    if "%scope_choice%"=="1" (
+        for /f "tokens=2*" %%A in ('reg query HKCU\Environment /v PATH 2^>nul') do set "CUR_PATH=%%B"
+    ) else (
+        for /f "tokens=2*" %%A in ('reg query HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment /v PATH 2^>nul') do set "CUR_PATH=%%B"
+    )
+
+    if not defined CUR_PATH set "CUR_PATH="
+
+    REM Check for existing entry (case-insensitive)
+    echo %CUR_PATH% | findstr /I /C:"%TARGET_DIR%" >nul
+    if %errorlevel%==0 (
+        echo [*] PATH already contains TeraShell =)
+    ) else (
+        echo [*] Adding TeraShell to PATH...
+        if "%scope_choice%"=="1" (
+            setx PATH "%CUR_PATH%;%TARGET_DIR%" >nul
+        ) else (
+            setx /M PATH "%CUR_PATH%;%TARGET_DIR%" >nul
+        )
+    )
+)
+
 
 REM -------------------------
 REM Ask about creating Start Menu shortcut
