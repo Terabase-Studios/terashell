@@ -1,6 +1,6 @@
 import os.path
-from os import makedirs
 import sys
+from os import makedirs
 
 SHELL_NAME = "TeraShell"
 
@@ -12,19 +12,16 @@ HELP_FILE = os.path.join(APP_DIR, "cmd_help.json")
 INSTANCE_FILE = os.path.join(APP_DIR, "instances.json")
 INSTR_FILE = os.path.join(APP_DIR, "instructions.json")
 
-
-
 # Waved warning files
 DISABLED_WARN_DIR = os.path.join(APP_DIR, "disabled_warn_files")
 makedirs(DISABLED_WARN_DIR, exist_ok=True)
 MAP_WARN_DISABLED_FILE = os.path.join(DISABLED_WARN_DIR, "map_warn_disabled.txt")
 
-PROMPT_HIGHLIGHTING = True
-
-# For Auto Complete
+# For Auto Complete and highlighting
 AUTO_COMPLETE = True
 ONE_FLAG_PER_GROUP = True
 ALWAYS_SUGGEST_HISTORY = False
+PROMPT_HIGHLIGHTING = True
 
 # For Indexing
 PATH_INDEXING = True

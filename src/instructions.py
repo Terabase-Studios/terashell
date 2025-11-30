@@ -1,6 +1,5 @@
-import os
 import json
-from sys import exception
+import os
 
 
 class InstructionHelper:

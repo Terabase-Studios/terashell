@@ -8,7 +8,7 @@ from prompt_toolkit.styles import Style
 
 from config import AUTO_COMPLETE, HISTORY_FILE, PROMPT_HIGHLIGHTING, ALWAYS_SUGGEST_HISTORY
 from indexer import CommandIndexer
-import shlex
+
 
 def clean_path(path, working_dir):
     no_quotes = path.strip("\"\'")

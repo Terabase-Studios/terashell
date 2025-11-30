@@ -4,7 +4,6 @@ import re
 import subprocess
 import sys
 import traceback
-import tempfile
 from copy import deepcopy
 from itertools import combinations
 from pathlib import Path

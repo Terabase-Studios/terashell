@@ -1,142 +1,39 @@
 import os
-import time
+import signal
 import subprocess
 import sys
-import json
+import time
 import traceback
-import socket
-from prompt_toolkit.formatted_text import ANSI
-
-from commands import ShellCommands
-from config import SHELL_NAME, SHOW_USER, IS_UNIX
-from input import ShellInput
-from config import HISTORY_FILE, INSTANCE_FILE
-from emergency import fallback
-
-try:
-    import colorama
-    colorama.init()
-except ImportError:
-    pass
-
-
-INITIAL_PRINT = """
-Welcome to Terashell!
-type 't?' to see a list of added commands!
-"""
 
 RED_BACKGROUND = "\033[41m"
-BOLD = "\033[1m"
-
+RED = "\033[91m"
 RESET = "\033[0m"
-RED = "\033[31m"
-CYAN = "\033[36m"
-WHITE = "\033[37m"
-BRIGHT_BLACK = "\033[90m"
-DARK_RED = "\033[38;2;139;0;0m"
-
-def get_current_user():
-    if IS_UNIX:
-        try:
-            import pwd
-            return pwd.getpwuid(os.geteuid()).pw_name
-        except Exception:
-            return os.environ.get("USER", "unknown")
-    else:  # Windows
-        return os.environ.get("USERNAME", "unknown")
-
-def instance_file(instance, file):
-    return file.replace(os.path.basename(file), os.path.basename(file)+f"-{instance}") if instance else file
-
-
-class MiniShell:
-    def __init__(self, instance=None):
-        self.running = True
-        self.command_handler = ShellCommands(self)
-        history_file = instance_file(instance, HISTORY_FILE)
-
-        self.input_handler = ShellInput(self, cmd_prefix=f"NO_PROMPT_DEFINED> ", history_file=history_file)
-        self.working_dir = os.getcwd()
-        self.active_venv = None
-        self.active_venv_version = None
-        self.instance = instance
-        self.shell_file = __file__
-
-        if "VIRTUAL_ENV" in os.environ:
-            self.command_handler._cmd_activate([os.environ.get("VIRTUAL_ENV")])
-
-    def run(self, command: str):
-        try:
-            subprocess.run(command, shell=True, stdout=sys.stdout, stderr=sys.stderr, env={**os.environ, "FORCE_COLOR": "1"},
-)
-        except Exception as e:
-            print(f"{SHELL_NAME} error: {e}")
-
-    def start(self):
-        print(INITIAL_PRINT)
-        while self.running:
-            try:
-                user = get_current_user()
-                MAIN_COLOR = CYAN if user != "root" else RED
-                BACK_COLOR = BRIGHT_BLACK if user != "root" else DARK_RED
-                instance = f"[{MAIN_COLOR}{self.instance}{RESET}]{BACK_COLOR}-{RESET}" if self.instance else ""
-                venv_version = f"{self.active_venv_version}@" if self.active_venv_version else ""
-                venv = f"[{MAIN_COLOR}{venv_version}{self.active_venv}{RESET}]{BACK_COLOR}-{RESET}" if self.active_venv else ""
-                user = f"[{MAIN_COLOR}{user}@{socket.gethostname()}{BACK_COLOR}{RESET}]{BACK_COLOR}-{RESET}" if SHOW_USER else ""
-                prefix = ANSI(f"{BACK_COLOR}TS-{RESET}{instance}{venv}{user}[{MAIN_COLOR}{self.working_dir}{RESET}]{BACK_COLOR}\n"
-                              f"└> {RESET}")
-                line = self.input_handler.input(cmd_prefix=prefix)
-            except KeyboardInterrupt:
-                print()
-                continue
-            except EOFError:
-                break
-
-            if not line:
-                continue
-
-            try:
-                print()
-                handled = self.command_handler.handle_command(line)
-                if not handled:
-                    self.run(line)
-                print()
-
-            except KeyboardInterrupt:
-                print()
+BOLD = "\033[1m"
 
 times_critical = 0
 warn = True
 
-def start_shell():
+def start_shell(shell_script):
     global times_critical
-    args = sys.argv
-    instance = None
-    if "--instance" in args:
-        try:
-            instance = args.pop(args.index("--instance") + 1)
-        except:
-            pass
-
+    from config import SHELL_NAME, IS_UNIX
+    # Handle instance safely if possible
     try:
-        instances = json.load(open(INSTANCE_FILE))
-    except:
-        instances = []
-    if instance and instance not in instances:
-        instances.append(instance)
-        with open(INSTANCE_FILE, "w") as f:
-            f.write(json.dumps(instances))
+        instance = shell_script.handle_instance()
+    except Exception as ex:
+        instance = None
 
-    shell = MiniShell(instance=instance)
+    # Try to start the shell if we successfully imported it
     try:
+        shell = shell_script.TeraShell(instance=instance)
         shell.start()
     except Exception as ex:
         times_critical += 1
         if warn:
             print(f"{RED_BACKGROUND}{SHELL_NAME} unhandled error:"
-                  f"\n{RESET}{RED}{traceback.format_exception(ex)}"
-                  f"\n\nPLEASE REPORT{RESET}")
+                    f"\n{RESET}{RED}{''.join(traceback.format_exception(type(ex), ex, ex.__traceback__))}"
+                    f"\n\nPLEASE REPORT{RESET}")
 
+        # If multiple critical errors, fallback
         if times_critical > 1 and IS_UNIX:
             if warn:
                 print(f"{BOLD}Multiple critical errors!{RESET}\n")
@@ -145,7 +42,104 @@ def start_shell():
         else:
             time.sleep(1)
             print(f"Restarting {SHELL_NAME}...")
-            start_shell()
+            start_shell(shell_script)
+            return
+
+def import_shell_script():
+    # Try to import the main shell script
+    try:
+        import shell
+        return shell
+    except Exception as ex:
+        try:
+            import config
+            shell_name = config.SHELL_NAME
+        except:
+            shell_name = "TeraShell"
+        print(f"{RED_BACKGROUND}{shell_name} unhandled error:{RESET}"
+                f"\n{RED}Failed to import shell script: {ex}{RESET}"
+                f"\n\n{RED}PLEASE REPORT{RESET}")
+        return None
+
+def fallback(cmd=None):
+    print("Attempting to start; bash, zsh, or sh")
+    for cand in ["/bin/bash", "/bin/zsh", "/bin/sh"]:
+        if os.path.exists(cand):
+            print(f"{cand} found, starting...\n")
+            subprocess.run([cand])
+            return
+        else:
+            print(f"{cand} not found")
+
+    try:
+        emergency_shell()
+    except Exception as e:
+        print("\nEmergency shell failed:", e)
+        print("Try and boot with a live os to make repairs")
+    sys.exit(1)
+
+def emergency_shell():
+    print("System shell could not be started.")
+    print("Entering emergency shell. Extremely limited environment.\n")
+
+    # Ignore Ctrl-C for the emergency shell itself
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+    working_dir = os.getcwd()
+
+    while True:
+        try:
+            try:
+                cmd = input(f"emergency@{working_dir}> ").strip()
+            except (KeyboardInterrupt, EOFError):
+                cmd = ""
+                continue
+
+            if not cmd:
+                continue
+
+            if cmd == "exit":
+                return
+
+            if cmd.startswith("cd "):
+                prev = working_dir
+                path = cmd.removeprefix("cd ").strip()
+                try:
+                    new_dir = os.path.expanduser("~") if not path else os.path.join(working_dir, path)
+                    if os.path.isdir(new_dir):
+                        working_dir = os.path.abspath(new_dir)
+                        os.chdir(working_dir)
+                    else:
+                        print(f"cd: no such directory: {path}")
+                except Exception as e:
+                    working_dir = prev
+                    print(e)
+                continue
+
+            # Run external commands with their own Ctrl-C behavior
+            try:
+                subprocess.run(
+                    cmd.split(),
+                    preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL)
+                )
+            except Exception as e:
+                print(f"Cannot execute: {e}")
+
+        except Exception as loop_err:
+            print(f"Unexpected emergency loop error: {loop_err}")
+
 
 if __name__ == "__main__":
-    start_shell()
+    shell_script = import_shell_script()
+    if shell_script:
+        start_shell(shell_script)
+    else:
+        is_unix = sys.platform.startswith("linux") or sys.platform.startswith("darwin")
+
+        if is_unix:
+            if warn:
+                print(f"{BOLD}Failed to start shell!{RESET}\n")
+            fallback()
+            sys.exit(1)
+        else:
+            sys.exit(1)
