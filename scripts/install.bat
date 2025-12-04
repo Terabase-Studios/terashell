@@ -6,8 +6,8 @@ REM Configuration
 REM -------------------------
 set "USER_TARGET=%LocalAppData%\TeraShell"
 set "ALL_USERS_TARGET=%ProgramFiles%\TeraShell"
-set "SRC_DIR=%~dp0\.."  REM assuming installer is in scripts\ folder
-set "REQUIREMENTS=%SRC_DIR%\requirements.txt"
+set "PY_SRC_DIR=%~dp0\..\py"
+set "REQUIREMENTS=%PY_SRC_DIR%\requirements.txt"
 set "PYTHON_MAJOR_REQ=3"
 set "PYTHON_MINOR_REQ=6"
 
@@ -88,7 +88,7 @@ REM Copy files
 REM -------------------------
 echo [*] Copying TeraShell files to %TARGET_DIR%...
 if not exist "%TARGET_DIR%" mkdir "%TARGET_DIR%"
-xcopy /E /I /Y "%SRC_DIR%\src\*" "%TARGET_DIR%\" >nul
+xcopy /E /I /Y "%PY_SRC_DIR%\src\*" "%TARGET_DIR%\" >nul
 
 REM -------------------------
 REM Create virtual environment

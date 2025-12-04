@@ -125,43 +125,42 @@ class BackgroundTaskManager:
             t.running = False
             print(f"[Task {task_id}] already exited")
 
-    class TaskManager:
-        def task_table(self):
-            """
-            Print a table of tasks with ID, PID, status, exit code, CPU %, memory usage, and command.
-            """
-            table = PrettyTable()
-            table.field_names = ["ID", "PID", "Status", "Exit Code", "CPU %", "Memory MB", "Command"]
+    def task_table(self):
+        """
+        Print a table of tasks with ID, PID, status, exit code, CPU %, memory usage, and command.
+        """
+        table = PrettyTable()
+        table.field_names = ["ID", "PID", "Status", "Exit Code", "CPU %", "Memory MB", "Command"]
 
-            for t in self.tasks.values():
-                pid = t.process.pid
-                cpu = 0.0
-                mem = 0.0
-                status = t.status()
+        for t in self.tasks.values():
+            pid = t.process.pid
+            cpu = 0.0
+            mem = 0.0
+            status = t.status()
 
-                try:
-                    proc = psutil.Process(pid)
-                    # Non-blocking: returns % since last call (you should have called this at least once before)
-                    cpu = proc.cpu_percent(interval=None)
-                    mem = proc.memory_info().rss / (1024 * 1024)
-                    # Optionally update status from psutil
-                    status = proc.status()
-                except psutil.NoSuchProcess:
-                    status = "terminated"
-                except psutil.AccessDenied:
-                    status = "access denied"
+            try:
+                proc = psutil.Process(pid)
+                # Non-blocking: returns % since last call (you should have called this at least once before)
+                cpu = proc.cpu_percent(interval=None)
+                mem = proc.memory_info().rss / (1024 * 1024)
+                # Optionally update status from psutil
+                status = proc.status()
+            except psutil.NoSuchProcess:
+                status = "terminated"
+            except psutil.AccessDenied:
+                status = "access denied"
 
-                table.add_row([
-                    t.id,
-                    pid,
-                    status,
-                    t.exit_code,
-                    f"{cpu:.1f}",
-                    f"{mem:.1f}",
-                    t.command
-                ])
+            table.add_row([
+                t.id,
+                pid,
+                status,
+                t.exit_code,
+                f"{cpu:.1f}",
+                f"{mem:.1f}",
+                t.command
+            ])
 
-            print(table)
+        print(table)
 
     async def shutdown(self):
         self._shutdown = True
@@ -188,7 +187,12 @@ def create_btm() -> BackgroundTaskManager:
     atexit.register(lambda: asyncio.run(btm.shutdown()))
 
     # Safe shutdown on signals
-    loop = asyncio.get_event_loop()
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
 
     def handle_signal(signum, frame):
         print(f"\nReceived signal {signum}, shutting down…")

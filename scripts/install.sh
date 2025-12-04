@@ -8,10 +8,10 @@ MIN_PYTHON_MAJOR=3
 MIN_PYTHON_MINOR=6
 
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
-SRC_DIR="$SCRIPT_DIR/.."   # TeraShell root
+PY_SRC_DIR="$SCRIPT_DIR/../py"   # TeraShell root
 TARGET_DIR="/usr/local/bin/terashell"
 WRAPPER="/usr/local/bin/terashell-shell"
-REQUIREMENTS="$SRC_DIR/requirements.txt"
+REQUIREMENTS="$PY_SRC_DIR/requirements.txt"
 CURRENT_USER="$(whoami)"
 
 # -------------------------
@@ -51,7 +51,7 @@ echo "[*] Installing TeraShell..."
 # -------------------------
 echo "[*] Copying source files..."
 sudo mkdir -p "$TARGET_DIR"
-sudo cp -r "$SRC_DIR/src"/* "$TARGET_DIR/"
+sudo cp -r "$PY_SRC_DIR/src"/* "$TARGET_DIR/"
 sudo chmod -R 755 "$TARGET_DIR"
 
 

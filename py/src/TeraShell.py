@@ -29,8 +29,8 @@ def start_shell(shell_script):
     except Exception as ex:
         times_critical += 1
         if warn:
-            print(f"{RED_BACKGROUND}{SHELL_NAME} unhandled error:"
-                f"\n{RESET}{RED}"
+            print(f"{RED_BACKGROUND}{SHELL_NAME} unhandled error:{RESET}"
+                f"\n{RED}"
             )
 
             traceback.print_exception(type(ex), ex, ex.__traceback__)
