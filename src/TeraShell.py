@@ -24,14 +24,17 @@ def start_shell(shell_script):
 
     # Try to start the shell if we successfully imported it
     try:
-        shell = shell_script.TeraShell(instance=instance)
+        shell = shell_script.TeraShell(instance=instance, shell_file=__file__)
         shell.start()
     except Exception as ex:
         times_critical += 1
         if warn:
             print(f"{RED_BACKGROUND}{SHELL_NAME} unhandled error:"
-                    f"\n{RESET}{RED}{''.join(traceback.format_exception(type(ex), ex, ex.__traceback__))}"
-                    f"\n\nPLEASE REPORT{RESET}")
+                f"\n{RESET}{RED}"
+            )
+
+            traceback.print_exception(type(ex), ex, ex.__traceback__)
+            print(f"\n\nPLEASE REPORT{RESET}")
 
         # If multiple critical errors, fallback
         if times_critical > 1 and IS_UNIX:

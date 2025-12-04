@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import socket
@@ -6,9 +7,10 @@ import sys
 
 from prompt_toolkit.formatted_text import ANSI
 
+from background import create_btm
 from commands import ShellCommands
 from config import HISTORY_FILE, INSTANCE_FILE
-from config import SHELL_NAME, SHOW_USER, IS_UNIX
+from config import SHELL_NAME, SHOW_USER, IS_UNIX, VERSION
 from input import ShellInput
 
 try:
@@ -18,9 +20,10 @@ except ImportError:
     pass
 
 
-INITIAL_PRINT = """
+INITIAL_PRINT = f"""
 Welcome to Terashell!
 type 't?' to see a list of added commands!
+Shell Version: {VERSION}
 """
 
 RED_BACKGROUND = "\033[41m"
@@ -48,9 +51,10 @@ def instance_file(instance, file):
 
 
 class TeraShell:
-    def __init__(self, instance=None):
+    def __init__(self, instance=None, shell_file=None):
         self.running = True
         self.command_handler = ShellCommands(self)
+        self.btm = create_btm()
         history_file = instance_file(instance, HISTORY_FILE)
 
         self.input_handler = ShellInput(self, cmd_prefix=f"NO_PROMPT_DEFINED> ", history_file=history_file)
@@ -58,15 +62,14 @@ class TeraShell:
         self.active_venv = None
         self.active_venv_version = None
         self.instance = instance
-        self.shell_file = __file__
+        self.shell_file = shell_file
 
         if "VIRTUAL_ENV" in os.environ:
             self.command_handler._cmd_activate([os.environ.get("VIRTUAL_ENV")])
 
     def run(self, command: str):
         try:
-            subprocess.run(command, shell=True, stdout=sys.stdout, stderr=sys.stderr, env={**os.environ, "FORCE_COLOR": "1"},
-)
+            subprocess.run(command, shell=True, stdout=sys.stdout, stderr=sys.stderr, env={**os.environ, "FORCE_COLOR": "1"},)
         except Exception as e:
             print(f"{SHELL_NAME} error: {e}")
 
@@ -97,7 +100,11 @@ class TeraShell:
                 print()
                 handled = self.command_handler.handle_command(line)
                 if not handled:
-                    self.run(line)
+                    args = line.split()[1:]
+                    if "&" in args:
+                        asyncio.run(self.btm.run_bg(line.replace("&", "")))
+                    else:
+                        self.run(line)
                 print()
 
             except KeyboardInterrupt:

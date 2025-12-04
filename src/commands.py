@@ -13,7 +13,6 @@ RED = "\033[91m"
 BOLD = "\033[1m"
 RESET = "\033[0m"
 
-
 class ShellCommands:
     def __init__(self, shell):
         self.shell = shell
@@ -37,26 +36,48 @@ class ShellCommands:
             "instr clear": self._cmd_instr,
             "instr add-last": self._cmd_instr,
             "instr": self._cmd_instr,
+            "bg tasks": self._cmd_bg,
+            "bg output": self._cmd_bg,
+            "bg kill": self._cmd_bg,
+            "bg": self._cmd_bg,
+
+        }
+
+        self.help_simple = {
+            "t?": f"See {SHELL_NAME} commands.",
+            "t? /all": f"See {SHELL_NAME} commands and subcommands.",
+            "f": f"Fall back to another shell on Unix. Restart on Windows",
+            "exit": f"Exit the current {SHELL_NAME} instance.",
+            "map": f"Run a tool and its commands recursively and add/update autocompletion.",
+            "history": "Managed stored inputs.",
+            "activate": "Usage: \"activate <venv>\" Activate a Python virtual environment.",
+            "deactivate": "Deactivate the current virtual environment.",
+            "nest": "Usage: Manage shell sub-instances with different saved data",
+            "instr": f"Create an instruction list within {SHELL_NAME}.",
+            "bg": "Manage background tasks. Create a background task with the \'&\' arg.",
         }
 
         self.help = {
             "t?": f"See {SHELL_NAME} commands.",
+            "t? /all": f"See {SHELL_NAME} commands and subcommands.",
             "f": f"Fall back to another shell on Unix. Restart on Windows",
             "exit": f"Exit the current {SHELL_NAME} instance.",
             "map": f"Run a tool and its commands recursively and add/update autocompletion.",
             "history": "See all previous inputs.",
-            "history clear": "Clear input history.",
+            "history Clear": "Clear input history.",
             "activate": "Usage: \"activate <venv>\" Activate a Python virtual environment.",
             "deactivate": "Deactivate the current virtual environment.",
             "nest": "Usage: \"nest <shell>\" Open a shell sub-instance with different saved data",
-            "nest list": "list all shell sub-instances",
+            "nest list": "List all shell sub-instances",
             "instr add": "Add a new instruction step.",
             "instr add-last": "Save the last executed command as an instruction.",
             "instr list": "List all instruction steps.",
             "instr save": "Usage: \"instr save <file>\" Save instructions to a markdown file.",
             "instr remove": "Remove the most recent instruction step.",
             "instr clear": "Clear all instruction steps.",
-
+            "bg tasks": "List all background tasks.",
+            "bg output": "Usage: \"bg output <id>\"see a task's output",
+            "bg kill": "Usage: \"bg kill <id>\"send a kill signal to a task",
         }
 
         self.command_list = list(self.commands.keys())
@@ -76,22 +97,30 @@ class ShellCommands:
         try:
             func(args)
         except Exception as e:
-            print(f"{SHELL_NAME} command error:\n{traceback.format_exc(e)}")
+            if hasattr(e, "message") and e.message == "Forced Critical Error":
+                raise e
+            else:
+                print(f"{SHELL_NAME} command error:")
+                traceback.print_exception(e)
 
         return True
 
     # --- built-ins ---
     def _cmd_help(self, args):
+        if len(args) != 0 and args[0] == "/all":
+            help = self.help
+        else:
+            help = self.help_simple
         header = f" {SHELL_NAME} Commands:"
         print(header, "\n", "-" * len(header))
-        width = max(len(cmd) for cmd in self.help)
+        width = max(len(cmd) for cmd in help)
 
-        for cmd, desc in self.help.items():
+        for cmd, desc in help.items():
             print(f"\t{cmd.ljust(width)} : {desc}")
         print()
         header = f" Modified commands:"
         print(header, "\n", "-" * len(header))
-        print(" ", ", ".join([i for i in self.get_commands() if i not in list(self.help.keys())]))
+        print(" ", ", ".join([i for i in self.get_commands() if i not in list(help.keys())]))
 
 
     def _cmd_exit(self, args):
@@ -110,7 +139,8 @@ class ShellCommands:
                 self.shell.working_dir = os.path.abspath(new_dir)
                 os.chdir(self.shell.working_dir)  # update Python process cwd
             else:
-                print(f"{SHELL_NAME}: cd: no such directory: {" ".join(args).strip("\"\'")}")
+                dir = " ".join(args).strip("\"\'")
+                print(f"{SHELL_NAME}: cd: no such directory: {dir}")
         except Exception as e:
             self.shell.working_dir = previous_dir
             print(e)
@@ -127,8 +157,8 @@ class ShellCommands:
                 return
 
         # execute the original behavior
-        with yaspin(text="Mapping tool: ", color="green", ) as spinner:
-            self.shell.input_handler.indexer.help_indexer.map_tool(args[0])
+        with yaspin(text=f"Mapping: {args[0]}", color="green", ) as spinner:
+            self.shell.input_handler.indexer.help_indexer.map_tool(args[0], spinner=spinner)
 
     def _cmd_history(self, args):
         if not args:
@@ -201,8 +231,8 @@ class ShellCommands:
         if " ".join(args).strip() == "list":
             self._cmd_nest_list(args)
             return
-
-        self.shell.run(f"{sys.executable} {self.shell.shell_file} --instance {" ".join(args)}")
+        instance = " ".join(args)
+        self.shell.run(f"{sys.executable} {self.shell.shell_file} --instance {instance}")
 
     def _cmd_nest_list(self, args):
         try:
@@ -265,5 +295,26 @@ class ShellCommands:
         main = sys.modules["__main__"]
         main.times_critical = 999999
         main.warn = False
-        raise Exception("Forced critical error")
+        raise Exception("Forced Critical Error")
 
+    def _cmd_bg(self, args):
+        if len(args) == 0:
+            print("Usage: bg <command>")
+            return
+        command = args[0]
+        args = args[1:]
+        match command:
+            case "output":
+                if len(args) != 1 or not args[0].isdigit():
+                    print("Usage: bg output <id>")
+                    return
+                self.shell.btm.show_output(int(args[0]))
+            case "kill":
+                if len(args) != 1 or not args[0].isdigit():
+                    print("Usage: kill <id>")
+                    return
+                self.shell.btm.kill(int(args[0]))
+            case "tasks":
+                self.shell.btm.task_table()
+            case _:
+                print("Usage: bg <command>")

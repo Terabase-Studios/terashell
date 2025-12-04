@@ -19,14 +19,6 @@ class CommandIndexer:
         "unix": ["cd", "ls", "echo", "cat", "cp", "mv", "rm", "clear"]
     }
 
-    ARG_HINTS = {
-        # Optional static argument hints
-        "ls": ["-a", "-l", "-h", "--color"],
-        "dir": ["/A", "/B", "/S"],
-        "copy": ["/Y", "/V"],
-        "rm": ["-f", "-r", "-i"]
-    }
-
     def __init__(self, index_path=True):
         self.index_path = index_path and PATH_INDEXING
         self.commands = self._get_all_commands()
@@ -46,6 +38,7 @@ class CommandIndexer:
                 for path in paths:
                     if not os.path.isdir(path):
                         continue
+                    spinner.text = f"Indexing path...   {path}"
                     for f in os.listdir(path):
                         full_path = os.path.join(path, f)
                         _, ext = os.path.splitext(f)
@@ -56,6 +49,7 @@ class CommandIndexer:
                 for path in paths:
                     if not os.path.isdir(path):
                         continue
+                    spinner.text = f"Indexing path...   {path}"
                     for f in os.listdir(path):
                         full_path = os.path.join(path, f)
                         if os.path.isfile(full_path) and os.access(full_path, os.X_OK):
@@ -67,7 +61,7 @@ class CommandIndexer:
     def _build_index(self):
         index = {}
         for cmd in self.commands:
-            index[cmd] = self.ARG_HINTS.get(cmd, [])
+            index[cmd] = []
         return index
 
     def get_commands(self):
@@ -139,7 +133,7 @@ class HelpIndexer:
     # ============================================================
     # Auto-generate help by running the tool
     # ============================================================
-    def map_tool(self, tool_name, base_cmd=None, recursive_depth=4, main=True, previous_help=None):
+    def map_tool(self, tool_name, base_cmd=None, recursive_depth=4, main=True, previous_help=None, spinner=None):
         """
         Runs the tool with multiple help flags and harvests its help text.
         Recursively processes subcommands.
@@ -157,6 +151,9 @@ class HelpIndexer:
 
         if recursive_depth and len(base_cmd) >= recursive_depth:
             return None, None
+
+        #if spinner:
+            #spinner.text = f"Reading {" ".join(base_cmd)}..."
 
         collected_help = ""
         for flag in HELP_FLAGS:
@@ -186,7 +183,8 @@ class HelpIndexer:
         if not collected_help or len(collected_help.splitlines()) <= 5 or previous_help == collected_help:
             return None, None
 
-
+        if spinner:
+            spinner.text = f"Mapping {" ".join(base_cmd)}..."
 
         dict = self._parse_help(collected_help)
         potential_commands = list(set(dict.get("potential_subcommands", [])))
@@ -194,14 +192,18 @@ class HelpIndexer:
 
         main_branch = {"command": base_cmd, "options": options, "subcommands": [], "branches": {}}
         commands = []
-        #print(potential_commands)
+        #print("\n", main_branch)
+        #print("\n", potential_commands)
         for command in potential_commands:
             if command in base_cmd:
                 continue
-            branch, subcommand_help = self.map_tool(command, base_cmd=base_cmd+[command], recursive_depth=recursive_depth, main=False, previous_help=collected_help)
+            if command == tool_name:
+                continue
+            branch, subcommand_help = self.map_tool(command, base_cmd=base_cmd+[command], recursive_depth=recursive_depth, main=False, previous_help=collected_help, spinner=spinner)
             if branch and collected_help != subcommand_help:
                 main_branch["branches"][command] = branch
                 commands.append(command)
+
 
         main_branch["subcommands"] = commands
 
@@ -241,6 +243,15 @@ class HelpIndexer:
         return main_branch, collected_help
 
     def get_ascii_tree(self, node, prefix="", is_last=True):
+        RED_BACKGROUND = "\033[41m"
+        BOLD = "\033[1m"
+
+        RESET = "\033[0m"
+        RED = "\033[31m"
+        CYAN = "\033[36m"
+        WHITE = "\033[37m"
+        BRIGHT_BLACK = "\033[90m"
+        DARK_RED = "\033[38;2;139;0;0m"
         lines = []
 
         # Build connector
@@ -250,7 +261,7 @@ class HelpIndexer:
         options = node.get("options")
         if options:
             opts_str = ", ".join([", ".join(opt) for opt in options])
-            line = f"{cmd_path} [{opts_str}]"
+            line = f"{BOLD}{cmd_path} {BRIGHT_BLACK}[{opts_str}]{RESET}"
         else:
             line = cmd_path
 
@@ -288,10 +299,30 @@ class HelpIndexer:
             flattened = "\n".join(f"{indent}{item}" for item in items).replace("{", "\n\t")
             return flattened + text
 
+        def filter(subcommand):
+            if subcommand.lower() != subcommand:
+                return False
+            if not subcommand:
+                return False
+            if "help" in subcommand:
+                return False
+            subcommand_chars = set(subcommand)
+            illegal_chars = ["\\", " ", "/", "`", "\'", "\"", ".", "-", "(", ")", "<", ">", "[", "]", "-"]
+            if any(item in subcommand_chars for item in illegal_chars):
+                return False
+
+            illegal_words = ["in", "this", "the", "its", "an", "and"]
+            if subcommand.lower().strip() in illegal_words:
+                return False
+
+            return True
+
         subcommands = []
 
         # Format help:
         lines = []
+        filtered = 0
+        MAX_FILTERED = 5
 
         for raw_line in flatten_set(text).splitlines():
             cleaned_line = re.sub(r'[^\x20-\x7E]', '', raw_line)
@@ -308,6 +339,13 @@ class HelpIndexer:
                     subcommand = no_tab_line.split()[0]
                 except IndexError:
                     subcommand = no_tab_line
+
+                if not filter(subcommand):
+                    filtered += 1
+                    if filtered >= MAX_FILTERED:
+                        break
+                    continue
+
                 subcommands.append(subcommand)
 
         return subcommands

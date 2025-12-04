@@ -6,7 +6,8 @@ from prompt_toolkit.history import FileHistory
 from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.styles import Style
 
-from config import AUTO_COMPLETE, HISTORY_FILE, PROMPT_HIGHLIGHTING, ALWAYS_SUGGEST_HISTORY
+from config import AUTO_COMPLETE, HISTORY_FILE, PROMPT_HIGHLIGHTING, ALWAYS_SUGGEST_HISTORY, \
+    COMPLETE_PATH, COMPLETE_ARGS, COMPLETE_HISTORY
 from indexer import CommandIndexer
 
 
@@ -94,27 +95,26 @@ class CommandCompleter(Completer):
                     if cmd_name.startswith(first_word):
                         yield Completion(cmd_name, start_position=start_pos)
             # --- Add filesystem path completion ---
-            for c in complete_path(text_before_cursor, ignore_case=self.ignore_case,
-                                   working_dir=self.input_handler.shell.working_dir):
-                yield Completion(c.text, start_position=start_pos)
+            if COMPLETE_PATH:
+                for c in complete_path(text_before_cursor, ignore_case=self.ignore_case,
+                                       working_dir=self.input_handler.shell.working_dir):
+                    yield Completion(c.text, start_position=start_pos)
             return  # don't try subcommands/flags yet
 
         # --- Subcommands/flags completion ---
         # Use HelpIndexer for suggestions
-        suggested = self.help_indexer.help_indexer.get_suggested(text_before_cursor)
-        suggestions = suggested.get("suggestions", [])
+        if COMPLETE_ARGS:
+            suggested = self.help_indexer.help_indexer.get_suggested(text_before_cursor)
+            suggestions = suggested.get("suggestions", [])
+        else:
+            suggestions = []
 
         last_token = tokens[-1]
         start_pos = -len(last_token)
         found_suggestion = False
 
-        # --- Add filesystem path completion ---
         last_token = tokens[-1]
         start_pos = -len(last_token)
-        for c in complete_path(last_token, ignore_case=self.ignore_case,
-                               working_dir=self.input_handler.shell.working_dir):
-            found_suggestion = True
-            yield Completion(c.text, start_position=start_pos)
 
         for s in suggestions:
             if self.ignore_case:
@@ -126,6 +126,13 @@ class CommandCompleter(Completer):
                     found_suggestion = True
                     yield Completion(s, start_position=start_pos)
 
+        # --- Add filesystem path completion ---
+        if COMPLETE_PATH:
+            for c in complete_path(last_token, ignore_case=self.ignore_case,
+                                   working_dir=self.input_handler.shell.working_dir):
+                found_suggestion = True
+                yield Completion(c.text, start_position=start_pos)
+
         for s in self.input_handler.shell.command_handler.get_commands():
             if self.ignore_case:
                 if s.lower().startswith(text_before_cursor.lower()):
@@ -136,7 +143,7 @@ class CommandCompleter(Completer):
                     found_suggestion = True
                     yield Completion(s, start_position=-len(text_before_cursor))
 
-        if not found_suggestion or ALWAYS_SUGGEST_HISTORY:
+        if not (found_suggestion or ALWAYS_SUGGEST_HISTORY) and COMPLETE_HISTORY:
             for s in list(set(self.input_handler.get_history())):
                 # Handle case-insensitive option
                 if self.ignore_case:

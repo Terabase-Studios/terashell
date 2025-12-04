@@ -3,6 +3,7 @@ import sys
 from os import makedirs
 
 SHELL_NAME = "TeraShell"
+VERSION = "0.2.6"
 
 # Cache files
 APP_DIR = os.path.expanduser(f"~/.{SHELL_NAME}")
@@ -20,7 +21,11 @@ MAP_WARN_DISABLED_FILE = os.path.join(DISABLED_WARN_DIR, "map_warn_disabled.txt"
 # For Auto Complete and highlighting
 AUTO_COMPLETE = True
 ONE_FLAG_PER_GROUP = True
+COMPLETE_PATH = True
+COMPLETE_ARGS = True
+COMPLETE_HISTORY = True
 ALWAYS_SUGGEST_HISTORY = False
+
 PROMPT_HIGHLIGHTING = True
 
 # For Indexing
