@@ -35,12 +35,9 @@ class ShellCommands:
             "instr save": self._cmd_instr,
             "instr clear": self._cmd_instr,
             "instr add-last": self._cmd_instr,
-            "instr": self._cmd_instr,
             "bg tasks": self._cmd_bg,
             "bg output": self._cmd_bg,
             "bg kill": self._cmd_bg,
-            "bg": self._cmd_bg,
-
         }
 
         self.help_simple = {
