@@ -8,7 +8,7 @@
       <excludeFolder url="file://$MODULE_DIR$/rust/target" />
       <excludeFolder url="file://$MODULE_DIR$/py/.venv" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.14 (terashell)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.14" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>
