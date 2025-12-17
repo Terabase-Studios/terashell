@@ -7,7 +7,7 @@ from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.styles import Style
 
 from config import AUTO_COMPLETE, HISTORY_FILE, PROMPT_HIGHLIGHTING, ALWAYS_SUGGEST_HISTORY, \
-    COMPLETE_PATH, COMPLETE_ARGS, COMPLETE_HISTORY
+    COMPLETE_PATH, COMPLETE_ARGS, COMPLETE_HISTORY, COMMAND_LINKING_SYMBOLS
 from indexer import CommandIndexer
 
 
@@ -61,7 +61,8 @@ class CommandCompleter(Completer):
     def _format_path(self, path, working_dir):
         """Clean up path for display, adding quotes if necessary."""
         no_quotes = path.strip("\"\'")
-        if working_dir:
+        # Only remove prefix if it's actually relative to the working dir
+        if working_dir and no_quotes.startswith(working_dir):
             no_quotes = no_quotes.removeprefix(working_dir).lstrip("\\/")
         if any(ch in no_quotes for ch in ' \t\n"\''):
             return f'"{no_quotes}"'
@@ -163,79 +164,157 @@ class ShellLexer(Lexer):
         text = document.text
         cwd = os.path.expanduser(self.shell.working_dir)
 
-        def get_line(lineno):
-            tokens = []
-            current = []
+        def split_by_linkers(line: str):
+            parts = []
+            buf = ""
+            i = 0
             in_quotes = False
+            quote_char = None
 
-            words = text.split(" ")
-            tool_index = 0 if words[0].strip() != "sudo" else 1
+            while i < len(line):
+                ch = line[i]
 
-            for i, word in enumerate(words):
-                if word.startswith(("'", '"')) and not in_quotes:
-                    in_quotes = True
-                    current.append(word)
-                    continue
-                if in_quotes:
-                    current.append(word)
-                    # check if this word ends with a quote (same type as opening)
-                    if word.endswith(("'", '"')):
-                        tokens.append(('class:quotes', ' '.join(current)))
-                        current = []
+                if ch in ("'", '"'):
+                    if not in_quotes:
+                        in_quotes = True
+                        quote_char = ch
+                    elif ch == quote_char:
                         in_quotes = False
+                        quote_char = None
+                    buf += ch
+                    i += 1
                     continue
 
-                # Expand ~ and resolve relative paths
-                full_path = os.path.expanduser(word.strip("\'\""))
-                if not os.path.isabs(full_path):
-                    full_path = os.path.join(cwd, full_path)
-                try:
-                    path_exists = os.path.exists(full_path)
-                    path_partial = (path_exists or any(
-                        f.startswith(os.path.basename(full_path))
-                        for f in (os.listdir(os.path.dirname(full_path)) if os.path.exists(os.path.dirname(full_path)) else [])
-                    ))
+                if not in_quotes:
+                    for sym in COMMAND_LINKING_SYMBOLS:
+                        if line.startswith(sym, i):
+                            if buf:
+                                parts.append(("segment", buf))
+                            parts.append(("link", sym))
+                            buf = ""
+                            i += len(sym)
+                            break
+                    else:
+                        buf += ch
+                        i += 1
+                else:
+                    buf += ch
+                    i += 1
 
-                    if word.lower().strip() == "sudo" and i == 0:
-                        tokens.append(('class:sudo', word))
+            if buf:
+                parts.append(("segment", buf))
+
+            return parts
+
+        def parse_segment(segment):
+            tokens = []
+            current = ""
+            in_quotes = False
+            quote_char = None
+            word_index = 0
+            words = segment.strip().split()
+            tool_index = 0 if words and words[0] != "sudo" else 1
+
+            def flush_word(word, i):
+                if not word:
+                    return
+
+                try:
+                    full_path = os.path.expanduser(word.strip("'\""))
+                    if not os.path.isabs(full_path):
+                        full_path = os.path.join(cwd, full_path)
+
+                    path_exists = os.path.exists(full_path)
+                    dirname = os.path.dirname(full_path)
+                    path_partial = (
+                            path_exists or
+                            (os.path.exists(dirname) and any(
+                                f.startswith(os.path.basename(full_path))
+                                for f in os.listdir(dirname)
+                            ))
+                    )
+
+                    if word.lower() == "sudo" and i == 0:
+                        tokens.append(("class:sudo", word))
                     elif word.startswith("$"):
-                        tokens.append(('class:env_var', word))
-                    # Partial path exists check: highlight even if only partially typed
+                        tokens.append(("class:env_var", word))
                     elif path_exists or path_partial:
-                        if '\\' in word or '/' in word:
-                            if path_exists:
-                                tokens.append(('class:path_complete', word))
-                            else:
-                                tokens.append(('class:path', word))
+                        if "/" in word or "\\" in word:
+                            tokens.append((
+                                "class:path_complete" if path_exists else "class:path",
+                                word
+                            ))
                         else:
-                            if path_exists and word != "." and word != "..":
-                                tokens.append(('class:file_complete', word))
-                            else:
-                                tokens.append(('class:file', word))
+                            tokens.append((
+                                "class:file_complete" if path_exists else "class:file",
+                                word
+                            ))
                     elif word.replace(".", "").isdigit():
-                        tokens.append(('class:digit', word))
-                    elif word.startswith('-') or word.startswith('/'):
-                        tokens.append(('class:optional', word))
+                        tokens.append(("class:digit", word))
+                    elif word.startswith("-") or word.startswith("/"):
+                        tokens.append(("class:optional", word))
                     elif i == tool_index:
                         if word in self.shell.command_handler.get_commands():
-                            tokens.append(('class:built_in', word))
+                            tokens.append(("class:built_in", word))
                         else:
-                            tokens.append(('class:command', word))
+                            tokens.append(("class:command", word))
                     else:
-                        tokens.append(('class:arg', word))
+                        tokens.append(("class:arg", word))
+
                 except Exception:
-                    tokens.append(('class:error', word))
-                tokens.append(('', ' '))  # add space back
-            if current:
-                tokens.append(('class:quotes', ' '.join(current)))
+                    tokens.append(("class:error", word))
+
+            i = 0
+            while i < len(segment):
+                ch = segment[i]
+
+                if ch in ("'", '"'):
+                    if not in_quotes:
+                        in_quotes = True
+                        quote_char = ch
+                    elif ch == quote_char:
+                        in_quotes = False
+                        quote_char = None
+
+                    current += ch
+                    i += 1
+                    continue
+
+                if ch == " " and not in_quotes:
+                    flush_word(current, word_index)
+                    if current:
+                        word_index += 1
+                    current = ""
+                    tokens.append(("", " "))  # ← real space preserved
+                    i += 1
+                    continue
+
+                current += ch
+                i += 1
+
+            flush_word(current, word_index)
+
+            return tokens
+
+        def get_line(_lineno):
+            tokens = []
+
+            for kind, value in split_by_linkers(text):
+                if kind == "link":
+                    tokens.append(("class:link", value.strip()))
+                else:
+                    tokens.extend(parse_segment(value))
+
             return tokens
 
         return get_line
+
 
 # Style for colors
 style = Style.from_dict({
     'command': 'bold ansiyellow',
     'sudo': 'bold ansired',
+    'link': 'bold ansiyellow',
     'arg': 'ansigray',
     'digit': 'ansiyellow',
     'optional': '#808080',

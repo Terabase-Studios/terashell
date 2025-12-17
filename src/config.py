@@ -30,7 +30,11 @@ PROMPT_HIGHLIGHTING = True
 
 # For Indexing
 PATH_INDEXING = True
+PATH_INDEXING_EXCLUDE = ["/mnt/c"]  # paths to exclude from indexing
 HELP_FLAGS = ["-h", "--help", "/?", "help"]  # common help flags
+
+# Command Linking Symbols
+COMMAND_LINKING_SYMBOLS = ["&&", "||", "|", ">", ">>", "<", "2>", "&>"]
 
 #Other
 SHOW_USER = True

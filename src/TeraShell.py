@@ -138,7 +138,7 @@ def emergency_shell():
 if __name__ == "__main__":
     # Non-interactive mode for scripts and tools like Cockpit/SSH
     # Executed via: terashell-shell -c "command"
-    if len(sys.argv) > 2 and sys.argv[1] == '-c':
+    if len(sys.argv) > 3 and sys.argv[1] == '-c':
         command_to_run = sys.argv[2]
         # We run the command and let its stdout/stderr flow to the parent.
         # This makes it behave like a standard non-interactive shell.

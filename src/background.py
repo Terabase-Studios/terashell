@@ -195,9 +195,10 @@ def create_btm() -> BackgroundTaskManager:
 
 
     def handle_signal(signum, frame):
-        print(f"\nReceived signal {signum}, shutting down…")
-        loop.create_task(btm.shutdown())
+        #print(f"\nReceived signal {signum}, shutting down…")
+        #loop.create_task(btm.shutdown())
         # Do not exit immediately, give shutdown a chance
+        pass
 
     signal.signal(signal.SIGINT, handle_signal)
     signal.signal(signal.SIGTERM, handle_signal)

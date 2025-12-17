@@ -10,7 +10,7 @@ from pathlib import Path
 
 from yaspin import yaspin
 
-from config import HELP_FILE, HELP_FLAGS, PATH_INDEXING, ONE_FLAG_PER_GROUP, IS_UNIX
+from config import HELP_FILE, HELP_FLAGS, PATH_INDEXING, ONE_FLAG_PER_GROUP, IS_UNIX, PATH_INDEXING_EXCLUDE
 
 
 class CommandIndexer:
@@ -47,6 +47,8 @@ class CommandIndexer:
                 commands.update(self.BUILTINS["win"])
             else:
                 for path in paths:
+                    if any(path.startswith(p) for p in PATH_INDEXING_EXCLUDE):
+                        continue
                     if not os.path.isdir(path):
                         continue
                     spinner.text = f"Indexing path...   {path}"

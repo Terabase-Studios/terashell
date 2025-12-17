@@ -96,7 +96,7 @@ class ShellCommands:
         try:
             func(args)
         except Exception as e:
-            if hasattr(e, "message") and e.message == "Forced Critical Error":
+            if str(e) == "Forced Critical Error":
                 raise e
             else:
                 print(f"{SHELL_NAME} command error:")

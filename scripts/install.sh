@@ -91,6 +91,22 @@ fi
 
 
 # -------------------------
+# Add 'terashell' to PATH
+# -------------------------
+echo ""
+read -r -p "Do you want to add 'terashell-shell' to your PATH to launch the shell? [y/N]: " path_choice
+case "$path_choice" in
+    [yY][eE][sS]|[yY])
+        echo "[*] Creating symlink for 'terashell-shell'..."
+        sudo ln -sf "$WRAPPER" /usr/local/bin/terashell
+        ;;
+    *)
+        echo "[*] Skipping PATH modification."
+        ;;
+esac
+
+
+# -------------------------
 # Shell Selection Prompt
 # -------------------------
 echo ""

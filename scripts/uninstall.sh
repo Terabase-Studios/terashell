@@ -37,6 +37,7 @@ fi
 echo "[*] Removing TeraShell files..."
 sudo rm -rf "$TARGET_DIR"
 sudo rm -f "$WRAPPER"
+sudo rm -f "/usr/local/bin/terashell-shell"
 
 # Remove wrapper from /etc/shells
 if grep -Fxq "$WRAPPER" /etc/shells; then
