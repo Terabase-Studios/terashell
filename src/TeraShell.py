@@ -60,8 +60,11 @@ def import_shell_script():
         except:
             shell_name = "TeraShell"
         print(f"{RED_BACKGROUND}{shell_name} unhandled error:{RESET}"
-                f"\n{RED}Failed to import shell script: {ex}{RESET}"
-                f"\n\n{RED}PLEASE REPORT{RESET}")
+              f"\n{RED}"
+              )
+
+        traceback.print_exception(type(ex), ex, ex.__traceback__)
+        print(f"\n\nPLEASE REPORT{RESET}")
         return None
 
 def fallback(cmd=None):
@@ -133,6 +136,16 @@ def emergency_shell():
 
 
 if __name__ == "__main__":
+    # Non-interactive mode for scripts and tools like Cockpit/SSH
+    # Executed via: terashell-shell -c "command"
+    if len(sys.argv) > 2 and sys.argv[1] == '-c':
+        command_to_run = sys.argv[2]
+        # We run the command and let its stdout/stderr flow to the parent.
+        # This makes it behave like a standard non-interactive shell.
+        result = subprocess.run(command_to_run, shell=True, env=os.environ)
+        sys.exit(result.returncode)
+
+    # Interactive mode (default)
     shell_script = import_shell_script()
     if shell_script:
         start_shell(shell_script)

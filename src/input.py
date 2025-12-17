@@ -11,148 +11,148 @@ from config import AUTO_COMPLETE, HISTORY_FILE, PROMPT_HIGHLIGHTING, ALWAYS_SUGG
 from indexer import CommandIndexer
 
 
-def clean_path(path, working_dir):
-    no_quotes = path.strip("\"\'")
-    no_long_path = no_quotes.removeprefix(working_dir)
-    if not no_long_path == no_quotes:
-        no_starting_slash = no_long_path.lstrip("\\/")
-    else:
-        no_starting_slash = no_long_path
-
-    if any(ch in no_starting_slash for ch in ' \t\n"\''):
-        proper_path = f"\"{no_starting_slash}\""
-    else:
-        proper_path = no_starting_slash
-    return proper_path
-
-def complete_path(text_before_cursor, ignore_case=False, working_dir=None):
-    text_expanded = os.path.expanduser(text_before_cursor)
-
-    # Split into directory and file prefix
-    dir_part, file_part = os.path.split(text_expanded)
-
-    # Handle Windows drive letters
-    if len(dir_part) == 2 and dir_part[1] == ":":
-        dir_part += os.sep
-
-    # If relative, join with shell working dir
-    if not os.path.isabs(dir_part):
-        if working_dir:
-            dir_part = os.path.join(working_dir, dir_part)
-        else:
-            dir_part = os.path.abspath(dir_part)
-
-    # Only try to list if dir exists
-    if not os.path.isdir(dir_part):
-        return
-
-    try:
-        entries = os.listdir(dir_part)
-    except (FileNotFoundError, PermissionError):
-        entries = []
-
-    for entry in entries:
-        if ignore_case:
-            match = entry.lower().startswith(file_part.lower())
-        else:
-            match = entry.startswith(file_part)
-        if match:
-            completion_path = os.path.join(dir_part, entry)
-            if os.path.isdir(completion_path):
-                completion_path += os.sep
-            yield Completion(clean_path(completion_path, working_dir), start_position=-len(file_part))
-
-
 class CommandCompleter(Completer):
     """
-    Completes the first word (command) separately,
-    then uses HelpIndexer for subcommands and flags.
+    Two-mode command completer:
+    1. First word: top-level commands.
+    2. Body: subcommands, flags, paths, and history after the last token.
     """
 
-    def __init__(self, input_handler, extra_commands = [], ignore_case=True):
+    def __init__(self, input_handler, extra_commands=None, ignore_case=True):
         self.input_handler = input_handler
         self.help_indexer = input_handler.indexer
         self.ignore_case = ignore_case
-        self.commands = sorted(self.help_indexer.get_commands() + extra_commands)  # top-level commands
+        self.commands = sorted(self.help_indexer.get_commands() + (extra_commands or []))
 
+    # -------------------- Path completion -------------------- #
+    def complete_path(self, text_before_cursor, working_dir=None):
+        text_expanded = os.path.expanduser(text_before_cursor)
+        dir_part, file_part = os.path.split(text_expanded)
+
+        # Handle Windows drive letters
+        if len(dir_part) == 2 and dir_part[1] == ":":
+            dir_part += os.sep
+
+        # Resolve relative paths
+        if not os.path.isabs(dir_part):
+            dir_part = os.path.join(working_dir or os.getcwd(), dir_part)
+        dir_part = os.path.abspath(dir_part)
+
+        if not os.path.isdir(dir_part):
+            return
+
+        try:
+            entries = os.listdir(dir_part)
+        except (FileNotFoundError, PermissionError):
+            entries = []
+
+        for entry in entries:
+            if self.ignore_case:
+                match = entry.lower().startswith(file_part.lower())
+            else:
+                match = entry.startswith(file_part)
+            if match:
+                full_path = os.path.join(dir_part, entry)
+                if os.path.isdir(full_path):
+                    full_path += os.sep
+                yield Completion(self._format_path(full_path, working_dir), start_position=-len(file_part))
+
+
+    def _format_path(self, path, working_dir):
+        """Clean up path for display, adding quotes if necessary."""
+        no_quotes = path.strip("\"\'")
+        if working_dir:
+            no_quotes = no_quotes.removeprefix(working_dir).lstrip("\\/")
+        if any(ch in no_quotes for ch in ' \t\n"\''):
+            return f'"{no_quotes}"'
+        return no_quotes
+
+    # -------------------- Command completion -------------------- #
+    def _complete_command(self, text):
+        for cmd in self.commands:
+            cmd_name = cmd.split(".")[0]  # top-level only
+            if self.ignore_case:
+                if cmd_name.lower().startswith(text.lower()):
+                    yield Completion(cmd_name, start_position=-len(text))
+            else:
+                if cmd_name.startswith(text):
+                    yield Completion(cmd_name, start_position=-len(text))
+
+    # -------------------- Subcommand / flag completion -------------------- #
+    def _complete_deterministic(self, last_token, text_before_cursor):
+        found = False
+
+        # HelpIndexer suggestions
+        if COMPLETE_ARGS:
+            suggested = self.help_indexer.help_indexer.get_suggested(text_before_cursor)
+            suggestions = suggested.get("suggestions", [])
+
+            partial = suggested.get("partial", True)
+
+            for s in suggestions:
+                if partial:
+                    yield Completion(s, start_position=-len(last_token))
+                else:
+                    yield Completion(s, start_position=0)
+
+        # Path completions
+        if COMPLETE_PATH:
+            for c in self.complete_path(last_token, self.input_handler.shell.working_dir):
+                found = True
+                yield Completion(c.text, start_position=-len(last_token))
+
+        # History completions (only after previous token)
+        if not found and COMPLETE_HISTORY:
+            prev_token_len = len(last_token)
+            seen_tails = set()
+            for entry in reversed(self.input_handler.get_history()):
+                words = entry.split()
+                if not words:
+                    continue
+                tail = words[-1]
+                if tail in seen_tails:
+                    continue
+                if self._matches_token(tail, last_token):
+                    yield Completion(tail, start_position=-prev_token_len)
+                    seen_tails.add(tail)
+    # -------------------- Subcommand / flag completion -------------------- #
+    def _complete_personalized(self, last_token, text_before_cursor):
+        return
+
+    # -------------------- Utility -------------------- #
+    def _matches_token(self, candidate, token):
+        if self.ignore_case:
+            return candidate.lower().startswith(token.lower())
+        return candidate.startswith(token)
+
+    # -------------------- Main entry -------------------- #
     def get_completions(self, document, complete_event):
         text_before_cursor = document.text_before_cursor
         tokens = text_before_cursor.split()
 
+        # No tokens: suggest top-level commands
         if not tokens:
+            for c in self._complete_command(""):
+                yield c
             return
 
-        # --- First word: command completion ---
-        if len(tokens) == 1 and text_before_cursor[-1] != " ":
-            first_word = tokens[0]
-            start_pos = -len(first_word)
-            for cmd in self.commands:
-                cmd_name = cmd.split(".")[0]  # only top-level
-                if self.ignore_case:
-                    if cmd_name.lower().startswith(first_word.lower()):
-                        yield Completion(cmd_name, start_position=start_pos)
-                else:
-                    if cmd_name.startswith(first_word):
-                        yield Completion(cmd_name, start_position=start_pos)
-            # --- Add filesystem path completion ---
+        # Guess Tool
+        tool_offset = tokens[0].strip() == "sudo"
+        tool_index = 0 if not tool_offset else 1
+        if len(tokens) == tool_index + 1 and not text_before_cursor.endswith(" "):
+            first_word = tokens[tool_index]
+            for c in self._complete_command(first_word):
+                yield c
             if COMPLETE_PATH:
-                for c in complete_path(text_before_cursor, ignore_case=self.ignore_case,
-                                       working_dir=self.input_handler.shell.working_dir):
-                    yield Completion(c.text, start_position=start_pos)
-            return  # don't try subcommands/flags yet
+                for c in self.complete_path(first_word, self.input_handler.shell.working_dir):
+                    yield Completion(c.text, start_position=-len(first_word))
+            return
 
-        # --- Subcommands/flags completion ---
-        # Use HelpIndexer for suggestions
-        if COMPLETE_ARGS:
-            suggested = self.help_indexer.help_indexer.get_suggested(text_before_cursor)
-            suggestions = suggested.get("suggestions", [])
-        else:
-            suggestions = []
-
+        # Guess deterministically
         last_token = tokens[-1]
-        start_pos = -len(last_token)
-        found_suggestion = False
+        for c in self._complete_deterministic(last_token, text_before_cursor.removeprefix("sudo")):
+            yield c
 
-        last_token = tokens[-1]
-        start_pos = -len(last_token)
-
-        for s in suggestions:
-            if self.ignore_case:
-                if s.lower().startswith(last_token.lower()):
-                    found_suggestion = True
-                    yield Completion(s, start_position=start_pos)
-            else:
-                if s.startswith(last_token):
-                    found_suggestion = True
-                    yield Completion(s, start_position=start_pos)
-
-        # --- Add filesystem path completion ---
-        if COMPLETE_PATH:
-            for c in complete_path(last_token, ignore_case=self.ignore_case,
-                                   working_dir=self.input_handler.shell.working_dir):
-                found_suggestion = True
-                yield Completion(c.text, start_position=start_pos)
-
-        for s in self.input_handler.shell.command_handler.get_commands():
-            if self.ignore_case:
-                if s.lower().startswith(text_before_cursor.lower()):
-                    found_suggestion = True
-                    yield Completion(s, start_position=-len(text_before_cursor))
-            else:
-                if s.startswith(text_before_cursor):
-                    found_suggestion = True
-                    yield Completion(s, start_position=-len(text_before_cursor))
-
-        if not (found_suggestion or ALWAYS_SUGGEST_HISTORY) and COMPLETE_HISTORY:
-            for s in list(set(self.input_handler.get_history())):
-                # Handle case-insensitive option
-                if self.ignore_case:
-                    if s.lower().startswith(text_before_cursor.lower()):
-                        # Replace everything typed so far
-                        yield Completion(s, start_position=-len(text_before_cursor))
-                else:
-                    if s.startswith(text_before_cursor):
-                        yield Completion(s, start_position=-len(text_before_cursor))
 
 # Lexer with live path highlighting
 class ShellLexer(Lexer):
@@ -169,6 +169,7 @@ class ShellLexer(Lexer):
             in_quotes = False
 
             words = text.split(" ")
+            tool_index = 0 if words[0].strip() != "sudo" else 1
 
             for i, word in enumerate(words):
                 if word.startswith(("'", '"')) and not in_quotes:
@@ -195,7 +196,9 @@ class ShellLexer(Lexer):
                         for f in (os.listdir(os.path.dirname(full_path)) if os.path.exists(os.path.dirname(full_path)) else [])
                     ))
 
-                    if word.startswith("$"):
+                    if word.lower().strip() == "sudo" and i == 0:
+                        tokens.append(('class:sudo', word))
+                    elif word.startswith("$"):
                         tokens.append(('class:env_var', word))
                     # Partial path exists check: highlight even if only partially typed
                     elif path_exists or path_partial:
@@ -211,9 +214,9 @@ class ShellLexer(Lexer):
                                 tokens.append(('class:file', word))
                     elif word.replace(".", "").isdigit():
                         tokens.append(('class:digit', word))
-                    elif word.startswith('-'):
+                    elif word.startswith('-') or word.startswith('/'):
                         tokens.append(('class:optional', word))
-                    elif i == 0:
+                    elif i == tool_index:
                         if word in self.shell.command_handler.get_commands():
                             tokens.append(('class:built_in', word))
                         else:
@@ -232,6 +235,7 @@ class ShellLexer(Lexer):
 # Style for colors
 style = Style.from_dict({
     'command': 'bold ansiyellow',
+    'sudo': 'bold ansired',
     'arg': 'ansigray',
     'digit': 'ansiyellow',
     'optional': '#808080',

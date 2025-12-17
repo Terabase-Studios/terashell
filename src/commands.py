@@ -27,17 +27,19 @@ class ShellCommands:
             "history clear": self._cmd_history,
             "activate": self._cmd_activate,
             "deactivate": self._cmd_deactivate,
-            "nest list": self._cmd_nest_list,
-            "nest": self._cmd_nest,
+        #    "nest list": self._cmd_nest,
+        #    "nest": self._cmd_nest,
             "instr add": self._cmd_instr,
             "instr remove": self._cmd_instr,
             "instr list": self._cmd_instr,
             "instr save": self._cmd_instr,
             "instr clear": self._cmd_instr,
             "instr add-last": self._cmd_instr,
+            "instr": self._cmd_instr,
             "bg tasks": self._cmd_bg,
             "bg output": self._cmd_bg,
             "bg kill": self._cmd_bg,
+            "bg": self._cmd_bg,
         }
 
         self.help_simple = {
@@ -49,7 +51,7 @@ class ShellCommands:
             "history": "Managed stored inputs.",
             "activate": "Usage: \"activate <venv>\" Activate a Python virtual environment.",
             "deactivate": "Deactivate the current virtual environment.",
-            "nest": "Usage: Manage shell sub-instances with different saved data",
+        #    "nest": "Usage: Manage shell sub-instances with different saved data",
             "instr": f"Create an instruction list within {SHELL_NAME}.",
             "bg": "Manage background tasks. Create a background task with the \'&\' arg.",
         }
@@ -64,8 +66,8 @@ class ShellCommands:
             "history Clear": "Clear input history.",
             "activate": "Usage: \"activate <venv>\" Activate a Python virtual environment.",
             "deactivate": "Deactivate the current virtual environment.",
-            "nest": "Usage: \"nest <shell>\" Open a shell sub-instance with different saved data",
-            "nest list": "List all shell sub-instances",
+        #    "nest": "Usage: \"nest <shell>\" Open a shell sub-instance with different saved data",
+        #    "nest list": "List all shell sub-instances",
             "instr add": "Add a new instruction step.",
             "instr add-last": "Save the last executed command as an instruction.",
             "instr list": "List all instruction steps.",
@@ -154,7 +156,7 @@ class ShellCommands:
                 return
 
         # execute the original behavior
-        with yaspin(text=f"Mapping: {args[0]}", color="green", ) as spinner:
+        with yaspin(text=f"Mapping: {args[0]}...", color="green", ) as spinner:
             self.shell.input_handler.indexer.help_indexer.map_tool(args[0], spinner=spinner)
 
     def _cmd_history(self, args):
@@ -226,18 +228,16 @@ class ShellCommands:
             return
 
         if " ".join(args).strip() == "list":
-            self._cmd_nest_list(args)
+            try:
+                instances = json.load(open(INSTANCE_FILE))
+            except Exception:
+                return
+            for i, instance in enumerate(instances):
+                print(f"{i + 1}: {instance}")
             return
+
         instance = " ".join(args)
         self.shell.run(f"{sys.executable} {self.shell.shell_file} --instance {instance}")
-
-    def _cmd_nest_list(self, args):
-        try:
-            instances = json.load(open(INSTANCE_FILE))
-        except Exception:
-            return
-        for i, instance in enumerate(instances):
-            print(f"{i+1}: {instance}")
 
     def _cmd_instr(self, args):
         if not args:

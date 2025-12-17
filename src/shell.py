@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import shlex
 import socket
 import subprocess
 import sys
@@ -100,10 +101,20 @@ class TeraShell:
                 print()
                 handled = self.command_handler.handle_command(line)
                 if not handled:
-                    args = line.split()[1:]
-                    if "&" in args:
-                        asyncio.run(self.btm.run_bg(line.replace("&", "")))
+                    try:
+                        # Use shlex for robust parsing, respecting quotes
+                        parts = shlex.split(line)
+                    except ValueError:
+                        # Fallback to simple split if shlex fails (e.g., unclosed quotes)
+                        parts = line.split()
+
+                    if parts and parts[-1] == '&':
+                        # Rejoin the command without the final '&'
+                        # This preserves command chains (&&, ||) for the background shell
+                        cmd_to_run = ' '.join(parts[:-1])
+                        asyncio.run(self.btm.run_bg(cmd_to_run))
                     else:
+                        # It's a normal foreground command
                         self.run(line)
                 print()
 

@@ -8,7 +8,7 @@ MIN_PYTHON_MAJOR=3
 MIN_PYTHON_MINOR=6
 
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
-PY_SRC_DIR="$SCRIPT_DIR/../py"   # TeraShell root
+PY_SRC_DIR="$SCRIPT_DIR/.."   # TeraShell root
 TARGET_DIR="/usr/local/bin/terashell"
 WRAPPER="/usr/local/bin/terashell-shell"
 REQUIREMENTS="$PY_SRC_DIR/requirements.txt"

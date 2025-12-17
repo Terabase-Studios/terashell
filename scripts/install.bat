@@ -6,7 +6,7 @@ REM Configuration
 REM -------------------------
 set "USER_TARGET=%LocalAppData%\TeraShell"
 set "ALL_USERS_TARGET=%ProgramFiles%\TeraShell"
-set "PY_SRC_DIR=%~dp0\..\py"
+set "PY_SRC_DIR=%~dp0\.."
 set "REQUIREMENTS=%PY_SRC_DIR%\requirements.txt"
 set "PYTHON_MAJOR_REQ=3"
 set "PYTHON_MINOR_REQ=6"

@@ -162,6 +162,7 @@ class HelpIndexer:
                 if collected_help and len(collected_help.splitlines()) > 5:
                     break
             except FileNotFoundError:
+                print()
                 result = subprocess.run(
                     base_cmd + [flag],
                     shell=True,
@@ -234,7 +235,8 @@ class HelpIndexer:
 
             print_block(block_text)
             print("\nThe above output is a fuzzy command representation\nand may not be accurate or complete.")
-            self.data[tool_name] = main_branch
+            if main_branch:
+                self.data[tool_name] = main_branch
             self._save()
         else:
             print_block("Main Help Page Found:\n\n" + collected_help.rstrip("\n"))
@@ -462,9 +464,14 @@ class HelpIndexer:
                 suggestions.extend(group)
 
         # Filter suggestions by prefix of last token if partial and make sure no duplicate flags if ONE_FLAG_PER_GROUP is False
+        partial = False
         last_token = tokens[-1]
-        if last_token not in (tool, typed_sub):
-            suggestions = [s for s in suggestions if s.startswith(last_token) and s not in used_flags]
+        if last_token and not line.endswith(" "):
+            partial = True
+            if last_token not in (tool, typed_sub):
+                suggestions = [s for s in suggestions if s.startswith(last_token) and s not in used_flags]
+        else:
+            suggestions = [s for s in suggestions if s not in used_flags]
 
         # Deduplicate and sort (shorter flags first)
         suggestions = sorted(set(suggestions), key=lambda x: (len(x), x), reverse=True)
@@ -472,5 +479,6 @@ class HelpIndexer:
         return {
             "command": tool,
             "subcommand": typed_sub,
-            "suggestions": suggestions
+            "suggestions": suggestions,
+            "partial": partial,
         }
