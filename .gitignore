@@ -182,5 +182,5 @@ cython_debug/
 /secure/
 
 # Gemini context files
-project_info/
-GEMINI.md
+#project_info/
+#GEMINI.md
