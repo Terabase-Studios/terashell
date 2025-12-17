@@ -46,7 +46,15 @@ This document outlines the development tasks required for the TeraShell 0.3.0 re
     *   For example, after a user types `git pull && `, the completer should suggest a new set of commands, not arguments for `git pull`.
     *   This is a complex enhancement to the parsing logic within the completer.
 
-## 4. Enhance `install.sh` with PATH Prompt
+## 4. Implement Proper Sudo Highlighting
+*   **Goal**: Improve the syntax highlighter to correctly identify and style the actual command being run when `sudo` is used.
+*   **Estimated Time**: 2-4 hours.
+*   **Affected Files**: `src/input.py` (`ShellLexer` class).
+*   **Important Info**:
+    *   Currently, if `sudo` is used, the highlighting for the subsequent command token may not be applied correctly.
+    *   The lexer needs to be updated to recognize `sudo` as a prefix and then apply its normal command highlighting logic to the *next* token.
+
+## 5. Enhance `install.sh` with PATH Prompt
 
 *   **Goal**: Modify the Unix installer (`install.sh`) to explicitly ask the user if they want to add TeraShell to the system PATH, mirroring the functionality of the Windows `install.bat` script. This gives users more control over their environment.
 *   **Estimated Time**: 1-2 hours.
@@ -56,7 +64,7 @@ This document outlines the development tasks required for the TeraShell 0.3.0 re
     *   The enhancement should involve adding a shell prompt (`read -p`) to ask the user.
     *   The logic for creating the symbolic link or wrapper script in a standard PATH directory should be made conditional based on the user's choice.
 
-## 5. Fix Global Install Behavior in `install.sh`
+## 6. Fix Global Install Behavior in `install.sh`
 
 *   **Goal [COMPLETED]**: The user reported that applying TeraShell globally via `install.sh` might be incorrectly launching the shell for the current user. This task is to investigate and rectify this behavior to ensure the script only sets the default shell for other users without affecting the current installation session.
 *   **Estimated Time**: 2-4 hours.
@@ -66,7 +74,7 @@ This document outlines the development tasks required for the TeraShell 0.3.0 re
     *   The problem might be related to how the script interacts with the environment when run by different shells.
     *   Testing on multiple Linux distributions (like Ubuntu and Fedora) would be beneficial to ensure consistent behavior.
 
-## 6. Correct Background Process (`&`) Detection
+## 7. Correct Background Process (`&`) Detection
 
 *   **Goal [COMPLETED]**: Refine the command parser to prevent it from misinterpreting `&` or `&&` within command arguments (e.g., in a URL or as a logical AND) as a request to run a background process.
 *   **Estimated Time**: 2-3 hours.
@@ -76,9 +84,9 @@ This document outlines the development tasks required for the TeraShell 0.3.0 re
     *   This should be replaced with more robust logic that only treats `&` as a background operator when it appears as a separate token at the end of the command line.
     *   Consider using Python's `shlex` module for more reliable parsing of command lines.
 
-## 7. Investigate Cockpit Compatibility
+## 8. Investigate Cockpit Compatibility
 
-*   **Goal [COMPLETED]**: The Cockpit web-based monitoring tool fails to work when TeraShell is set as the user's default shell. This task is to investigate the cause and implement a solution.
+*   **Goal**: The Cockpit web-based monitoring tool fails to work when TeraShell is set as the user's default shell. This task is to investigate the cause and implement a solution.
 *   **Estimated Time**: 4-8 hours.
 *   **Affected Files**: Potentially `src/TeraShell.py` and `src/shell.py`.
 *   **Important Info**:
@@ -86,7 +94,7 @@ This document outlines the development tasks required for the TeraShell 0.3.0 re
     *   The solution may involve detecting when TeraShell is run in a non-interactive session and either executing the command differently or passing it to a standard shell like `bash`.
     *   This could also be solved by making TeraShell's non-interactive mode more compliant with expected standard shell behaviors.
 
-## 8. Implement Environment Variable Handling
+## 9. Implement Environment Variable Handling
 *   **Goal**: Implement expansion of environment variables (e.g., `$HOME` on Unix, `%USERPROFILE%` on Windows) within the shell's command handling.
 *   **Estimated Time**: 3-4 hours.
 *   **Affected Files**: `src/shell.py`, `src/input.py`.
@@ -95,7 +103,7 @@ This document outlines the development tasks required for the TeraShell 0.3.0 re
     *   This can be achieved using `os.path.expandvars` and `os.path.expanduser`.
     *   This needs to be integrated into the command execution flow.
 
-## 9. Implement Adaptive Autocomplete
+## 10. Implement Adaptive Autocomplete
 
 *   **Goal**: Add a third layer of autocompletion that provides predictive suggestions based on the user's command history and context, similar to the adaptive suggestions in JetBrains IDEs.
 *   **Estimated Time**: 16-24 hours.
