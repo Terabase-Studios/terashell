@@ -181,6 +181,5 @@ cython_debug/
 .cursorindexingignore
 /secure/
 
-# Gemini context files
-#project_info/
+secrets/
 #GEMINI.md
