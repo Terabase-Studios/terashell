@@ -8,12 +8,7 @@ import time # Added for sleep in debug
 # We need to import the main function from TeraShell to test it.
 # This relies on the pytest.ini configuration `pythonpath = src`.
 from TeraShell import main
-
-@pytest.fixture
-def mock_subprocess_run():
-    """Fixture to mock subprocess.run."""
-    with mock.patch("subprocess.run") as mock_run:
-        yield mock_run
+import config
 
 def run_with_timeout(func, timeout=5):
     """Run func in a thread, fail if it doesn't finish within timeout seconds."""
@@ -37,53 +32,63 @@ def run_with_timeout(func, timeout=5):
 
 
 # --- Tests for -c argument with timeout ---
-def test_c_argument_success(monkeypatch, mock_subprocess_run):
-    """Verifies '-c <command>' runs successfully."""
+def test_c_argument_success(monkeypatch):
+    """Verifies '-c <command>' runs successfully and prints output."""
     def inner():
         test_command = 'echo "Terashell -c test successful"'
-        print(f"\n[test_c_argument_success] --- Running Test ---")
-        print(f"[test_c_argument_success] Test command: {test_command}")
-
         monkeypatch.setattr(sys, "argv", ["TeraShell.py", "-c", test_command])
-        print(f"[test_c_argument_success] sys.argv set to: {sys.argv}")
 
-        mock_subprocess_run.return_value.returncode = 0
+        # Pipe to capture stdout
+        r, w = os.pipe()
+        original_stdout_fd = os.dup(1)
+        os.dup2(w, 1)
 
-        with pytest.raises(SystemExit) as e:
-            main()
+        try:
+            with pytest.raises(SystemExit) as e:
+                main()
+            assert e.value.code == 0
 
-        mock_subprocess_run.assert_called_once_with(test_command, shell=True, env=os.environ)
-        print(f"[test_c_argument_success] mock_subprocess_run called with: {mock_subprocess_run.call_args}")
+            # Close write end of pipe
+            os.close(w)
+            output = os.read(r, 1000).decode('utf-8')
+            assert "Terashell -c test successful" in output
+        finally:
+            # Restore stdout
+            os.dup2(original_stdout_fd, 1)
+            os.close(original_stdout_fd)
+            os.close(r)
 
-        assert e.value.code == 0
-        print(f"[test_c_argument_success] Exit code: {e.value.code}")
-        print(f"[test_c_argument_success] --- Test Finished ---")
+    run_with_timeout(inner, timeout=2)
 
-    run_with_timeout(inner, timeout=1)
 
-def test_c_argument_failure(monkeypatch, mock_subprocess_run):
-    """Verifies '-c <command>' fails correctly with non-zero exit code."""
+def test_c_argument_failure(monkeypatch):
+    """Verifies '-c <command>' fails correctly with non-zero exit code and prints to stderr."""
     def inner():
         test_command = 'a-command-that-will-fail'
-        print(f"\n[test_c_argument_failure] --- Running Test ---")
-        print(f"[test_c_argument_failure] Test command: {test_command}")
-
         monkeypatch.setattr(sys, "argv", ["TeraShell.py", "-c", test_command])
-        print(f"[test_c_argument_failure] sys.argv set to: {sys.argv}")
 
-        mock_subprocess_run.return_value.returncode = 127
+        # Pipe to capture stderr
+        r, w = os.pipe()
+        original_stderr_fd = os.dup(2)
+        os.dup2(w, 2)
 
-        with pytest.raises(SystemExit) as e:
-            main()
+        try:
+            with pytest.raises(SystemExit) as e:
+                main()
 
-        mock_subprocess_run.assert_called_once_with(test_command, shell=True, env=os.environ)
-        print(f"[test_c_argument_failure] mock_subprocess_run called with: {mock_subprocess_run.call_args}")
+            assert e.value.code != 0
 
-        assert e.value.code == 127
-        print(f"[test_c_argument_failure] Exit code: {e.value.code}")
-        print(f"[test_c_argument_failure] --- Test Finished ---")
+            # Close write end of pipe
+            os.close(w)
+            error_output = os.read(r, 1000).decode('utf-8')
+            assert len(error_output) > 0
+        finally:
+            # Restore stderr
+            os.dup2(original_stderr_fd, 2)
+            os.close(original_stderr_fd)
+            os.close(r)
 
-    run_with_timeout(inner, timeout=1)
+    run_with_timeout(inner, timeout=2)
 
 
 def test_interactive_shell():
@@ -92,6 +97,8 @@ def test_interactive_shell():
         import wexpect as pexpect
     else:
         import pexpect
+
+    config.PATH_INDEXING = False
         
     print(f"\n[test_interactive_shell] --- Running Test ---")
 

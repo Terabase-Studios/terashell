@@ -12,18 +12,18 @@ This phase focuses on ensuring that all built-in shell commands located in `src/
 *   **Affected Files**: `tests/test_commands.py`
 
 ### Test Cases:
-1.  **`cd` Command**:
+1.  **`cd` Command**: [COMPLETE]
     *   `cd` (no arguments) should change to the user's home directory.
     *   `cd <existing_directory>` should change to the specified directory.
     *   `cd <non_existent_directory>` should report an error and not change the directory.
     *   `cd ~` and `cd ~/subdir` should correctly expand the home directory path.
     *   `cd -` (if implemented) to go to the previous directory.
 
-2.  **`history` Command**:
+2.  **`history` Command** [COMPLETE]:
     *   `history` should correctly display the command history.
     *   `history clear` should wipe the history.
 
-3.  **`activate` / `deactivate` Commands**:
+3.  **`activate` / `deactivate` Commands** [COMPLETE]:
     *   `activate <venv_path>` should correctly set the `VIRTUAL_ENV` and update the `PATH` environment variables.
     *   `deactivate` should restore the environment variables to their previous state.
 

@@ -53,6 +53,10 @@ This document outlines the development tasks required for the TeraShell 0.3.0 re
     *   **Affected Files**: `src/input.py` (`_format_path` method).
     *   **Important Info**: The `lstrip` call in `_format_path` is too aggressive and needs to be adjusted to preserve the leading slash for absolute paths.
 
+*   **9. Better Lexing Coloring**
+    *   **Goal [COMPLETED]**: Improved the overall lexing coloring to enhance readability and user experience. This includes improvements such as proper sudo highlighting.
+    *   **Affected Files**: `src/input.py` (`ShellLexer` class).
+
 ---
 
 ## New Features
@@ -88,3 +92,7 @@ This document outlines the development tasks required for the TeraShell 0.3.0 re
 *   **8. Improved Theming**
     *   **Goal**: Expand on the external configuration to allow for full theming of the shell.
     *   **Affected Files**: `src/input.py`, `src/shell.py`, and the new config module.
+
+*   **9. Implement `instr` Execution Command**
+    *   **Goal**: Allow TeraShell to execute instruction files, potentially accounting for differences between computers.
+    *   **Affected Files**: `src/instructions.py`, `src/shell.py`.

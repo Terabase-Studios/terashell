@@ -55,3 +55,22 @@ def test_cd_with_tilde_expansion(shell_commands):
     assert shell.working_dir == home_dir
     # Assert that os.chdir was called with the home directory
     mock_chdir.assert_called_with(home_dir)
+
+def test_cd_with_tilde_expansion_to_subdir(shell_commands):
+    """Test 'cd' with '~/subdir' expansion."""
+    commands, shell, mock_chdir = shell_commands
+    home_dir = Path.home()
+    
+    # Create a subdirectory in the home directory for the test
+    subdir = home_dir / "test_subdir_for_cd"
+    subdir.mkdir(exist_ok=True)
+    
+    commands.handle_command(f"cd ~/test_subdir_for_cd")
+    
+    # Assert that the shell's working directory is updated to the subdir in home
+    assert shell.working_dir == str(subdir)
+    # Assert that os.chdir was called with the correct path
+    mock_chdir.assert_called_with(str(subdir))
+
+    # cleanup
+    subdir.rmdir()

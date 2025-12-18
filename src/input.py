@@ -320,21 +320,29 @@ class ShellLexer(Lexer):
 
 # Style for colors
 style = Style.from_dict({
-    'command': 'bold ansiyellow',
-    'sudo': 'bold ansired',
-    'link': 'bold ansiyellow',
-    'arg': '#D0D0D0',
-    'digit': 'ansiyellow',
-    'optional': '#808080',
-    'path': 'ansicyan',
-    'file': 'ansiwhite',
-    'path_complete': 'underline ansicyan',
-    'file_complete': 'underline ansiwhite',
-    'env_var': 'ansigreen',
-    'built_in': 'ansigreen',
-    'error': 'ansired',
-    'quotes': 'italic ansicyan'
+    # commands & control
+    "command":        "bold #c98c6c",
+    "built_in":       "#69aa71",
+    "sudo":           "bold #db5d6b",
+
+    # arguments & values
+    "arg":            "#D4D4D4",
+    "digit":          "#2aacb8",
+    "optional":       "#737d84",
+    "quotes":         "italic #69aa71",
+
+    # filesystem
+    "path":           "#6f94dd",
+    "file":           "#EDEDED",
+    "path_complete":  "underline #6f94dd",
+    "file_complete":  "underline #EDEDED",
+    "link":           "#7b87b8",
+
+    # environment & errors
+    "env_var":        "#5f826b",
+    "error":          "bold #db5d6b",
 })
+
 
 # Shell input
 class ShellInput:
@@ -389,11 +397,12 @@ class ShellInput:
 
     def clear_history(self):
         # wipe the file
+        filename = self.history.filename
         del self.history
-        open(HISTORY_FILE, "w").close()
+        open(filename, "w").close()
 
         # rebuild the session
-        self.history = FileHistory(HISTORY_FILE)
+        self.history = FileHistory(filename)
 
         if AUTO_COMPLETE:
             completer = CommandCompleter(
