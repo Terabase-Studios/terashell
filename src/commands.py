@@ -132,14 +132,17 @@ class ShellCommands:
                 # default to home directory
                 new_dir = os.path.expanduser("~")
             else:
-                new_dir = os.path.join(self.shell.working_dir, " ".join(args).strip("\"\'"))
+                path_arg = " ".join(args).strip("\"\'")
+                # Expand user (~), and resolve relative paths (., ..)
+                # This handles absolute and relative paths correctly.
+                new_dir = os.path.abspath(os.path.expanduser(path_arg))
 
             if os.path.isdir(new_dir):
-                self.shell.working_dir = os.path.abspath(new_dir)
+                self.shell.working_dir = new_dir
                 os.chdir(self.shell.working_dir)  # update Python process cwd
             else:
-                dir = " ".join(args).strip("\"\'")
-                print(f"{SHELL_NAME}: cd: no such directory: {dir}")
+                dir_name = " ".join(args).strip("\"\'")
+                print(f"{SHELL_NAME}: cd: no such directory: {dir_name}")
         except Exception as e:
             self.shell.working_dir = previous_dir
             print(e)
@@ -221,6 +224,7 @@ class ShellCommands:
         os.environ["PATH"] = os.pathsep.join(paths)
 
         self.shell.active_venv = None
+        self.shell.active_venv_version = None
 
     def _cmd_nest(self, args):
         if not args:
