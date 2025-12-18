@@ -13,6 +13,8 @@ BOLD = "\033[1m"
 times_critical = 0
 warn = True
 
+failed_to_start = False
+
 def start_shell(shell_script):
     global times_critical
     from config import SHELL_NAME, IS_UNIX
@@ -35,6 +37,9 @@ def start_shell(shell_script):
 
             traceback.print_exception(type(ex), ex, ex.__traceback__)
             print(f"\n\nPLEASE REPORT{RESET}")
+
+        global failed_to_start
+        failed_to_start = traceback.format_exc()
 
         # If multiple critical errors, fallback
         if times_critical > 1 and IS_UNIX:
@@ -65,6 +70,10 @@ def import_shell_script():
 
         traceback.print_exception(type(ex), ex, ex.__traceback__)
         print(f"\n\nPLEASE REPORT{RESET}")
+
+        global failed_to_start
+        failed_to_start = traceback.format_exc()
+
         return None
 
 def fallback(cmd=None):
@@ -134,16 +143,26 @@ def emergency_shell():
         except Exception as loop_err:
             print(f"Unexpected emergency loop error: {loop_err}")
 
-
-if __name__ == "__main__":
+def main():
     # Non-interactive mode for scripts and tools like Cockpit/SSH
     # Executed via: terashell-shell -c "command"
-    if len(sys.argv) > 3 and sys.argv[1] == '-c':
-        command_to_run = sys.argv[2]
-        # We run the command and let its stdout/stderr flow to the parent.
-        # This makes it behave like a standard non-interactive shell.
-        result = subprocess.run(command_to_run, shell=True, env=os.environ)
-        sys.exit(result.returncode)
+    if '-c' in sys.argv:
+        try:
+            c_index = sys.argv.index('-c')
+            # The command is everything after '-c'
+            if c_index + 1 < len(sys.argv):
+                command_to_run = " ".join(sys.argv[c_index+1:])
+                # We run the command and let its stdout/stderr flow to the parent.
+                # This makes it behave like a standard non-interactive shell.
+                result = subprocess.run(command_to_run, shell=True, env=os.environ)
+                sys.exit(result.returncode)
+            else:
+                # This case handles when '-c' is the last argument with no command
+                print("terashell: -c: option requires an argument", file=sys.stderr)
+                sys.exit(2)
+        except ValueError:
+            # This should not happen if '-c' is in sys.argv, but as a safeguard
+            pass
 
     # Interactive mode (default)
     shell_script = import_shell_script()
@@ -159,3 +178,7 @@ if __name__ == "__main__":
             sys.exit(1)
         else:
             sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

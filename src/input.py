@@ -215,11 +215,12 @@ class ShellLexer(Lexer):
             words = segment.strip().split()
             tool_index = 0 if words and words[0] != "sudo" else 1
 
-            def flush_word(word, i):
+            def flush_word(word, i, quoted=False):
                 if not word:
                     return
 
                 try:
+                    # strip quotes only for path checking
                     full_path = os.path.expanduser(word.strip("'\""))
                     if not os.path.isabs(full_path):
                         full_path = os.path.join(cwd, full_path)
@@ -234,7 +235,9 @@ class ShellLexer(Lexer):
                             ))
                     )
 
-                    if word.lower() == "sudo" and i == 0:
+                    if quoted:
+                        tokens.append(("class:quotes", word))  # <- key change
+                    elif word.lower() == "sudo" and i == 0:
                         tokens.append(("class:sudo", word))
                     elif word.startswith("$"):
                         tokens.append(("class:env_var", word))
@@ -272,11 +275,14 @@ class ShellLexer(Lexer):
                     if not in_quotes:
                         in_quotes = True
                         quote_char = ch
+                        current = ch  # start including quote
                     elif ch == quote_char:
                         in_quotes = False
+                        current += ch
+                        flush_word(current, word_index, quoted=True)
+                        current = ""
+                        word_index += 1
                         quote_char = None
-
-                    current += ch
                     i += 1
                     continue
 
@@ -285,14 +291,16 @@ class ShellLexer(Lexer):
                     if current:
                         word_index += 1
                     current = ""
-                    tokens.append(("", " "))  # ← real space preserved
+                    tokens.append(("", " "))  # preserve real space
                     i += 1
                     continue
 
                 current += ch
                 i += 1
 
-            flush_word(current, word_index)
+            # flush anything left (in case segment ends without space)
+            if current:
+                flush_word(current, word_index, quoted=in_quotes)
 
             return tokens
 
@@ -315,7 +323,7 @@ style = Style.from_dict({
     'command': 'bold ansiyellow',
     'sudo': 'bold ansired',
     'link': 'bold ansiyellow',
-    'arg': 'ansigray',
+    'arg': '#D0D0D0',
     'digit': 'ansiyellow',
     'optional': '#808080',
     'path': 'ansicyan',

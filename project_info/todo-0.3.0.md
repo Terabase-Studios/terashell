@@ -45,11 +45,11 @@ This document outlines the development tasks required for the TeraShell 0.3.0 re
         *   The implemented statuses are: `RUNNING`, `DONE`, `FAILED`, `KILLED`.
 
 *   **7. Implement Proper Sudo Highlighting**
-    *   **Goal**: Improve the syntax highlighter to correctly identify and style the actual command being run when `sudo` is used.
+    *   **Goal [COMPLETED]**: Improve the syntax highlighter to correctly identify and style the actual command being run when `sudo` is used.
     *   **Affected Files**: `src/input.py` (`ShellLexer` class).
 
 *   **8. Fix Absolute Path Autocorrect**
-    *   **Goal**: Prevent the autocompletion from removing the leading slash on absolute paths.
+    *   **Goal [COMPLETED]**: Prevent the autocompletion from removing the leading slash on absolute paths.
     *   **Affected Files**: `src/input.py` (`_format_path` method).
     *   **Important Info**: The `lstrip` call in `_format_path` is too aggressive and needs to be adjusted to preserve the leading slash for absolute paths.
 
@@ -78,7 +78,7 @@ This document outlines the development tasks required for the TeraShell 0.3.0 re
     *   **Affected Files**: `src/input.py`, and likely a new file for the prediction logic.
 
 *   **6. Implement a Formal Testing Suite**
-    *   **Goal**: The project currently lacks automated tests. Integrating a framework like `pytest` and writing unit and integration tests is the highest priority for ensuring long-term stability and maintainability.
+    *   **Goal [COMPLETED]**: The project currently lacks automated tests. Integrating a framework like `pytest` and writing unit and integration tests is the highest priority for ensuring long-term stability and maintainability.
     *   **Affected Files**: New `tests/` directory and test files.
 
 *   **7. Alias and Function Support**
