@@ -24,44 +24,59 @@ class CommandCompleter(Completer):
         self.ignore_case = ignore_case
         self.commands = sorted(self.help_indexer.get_commands() + (extra_commands or []))
 
+    # -------------------- Dedupe Gate -------------------- #
+    def _dedupe(self, completions):
+        seen = set()
+        for c in completions:
+            key = (
+                c.text.lower() if self.ignore_case else c.text,
+                c.start_position,
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            yield c
+
     # -------------------- Path completion -------------------- #
     def complete_path(self, text_before_cursor, working_dir=None):
         text_expanded = os.path.expanduser(text_before_cursor)
         dir_part, file_part = os.path.split(text_expanded)
 
-        # Handle Windows drive letters
         if len(dir_part) == 2 and dir_part[1] == ":":
             dir_part += os.sep
 
-        # Resolve relative paths
         if not os.path.isabs(dir_part):
             dir_part = os.path.join(working_dir or os.getcwd(), dir_part)
         dir_part = os.path.abspath(dir_part)
 
         if not os.path.isdir(dir_part):
-            return
+            return []
 
         try:
             entries = os.listdir(dir_part)
         except (FileNotFoundError, PermissionError):
-            entries = []
+            return []
 
+        out = []
         for entry in entries:
-            if self.ignore_case:
-                match = entry.lower().startswith(file_part.lower())
-            else:
-                match = entry.startswith(file_part)
-            if match:
-                full_path = os.path.join(dir_part, entry)
-                if os.path.isdir(full_path):
-                    full_path += os.sep
-                yield Completion(self._format_path(full_path, working_dir), start_position=-len(file_part))
+            match = entry.lower().startswith(file_part.lower()) if self.ignore_case else entry.startswith(file_part)
+            if not match:
+                continue
 
+            full_path = os.path.join(dir_part, entry)
+            if os.path.isdir(full_path):
+                full_path += os.sep
+
+            out.append(
+                Completion(
+                    self._format_path(full_path, working_dir),
+                    start_position=-len(file_part),
+                )
+            )
+        return out
 
     def _format_path(self, path, working_dir):
-        """Clean up path for display, adding quotes if necessary."""
         no_quotes = path.strip("\"\'")
-        # Only remove prefix if it's actually relative to the working dir
         if working_dir and no_quotes.startswith(working_dir):
             no_quotes = no_quotes.removeprefix(working_dir).lstrip("\\/")
         if any(ch in no_quotes for ch in ' \t\n"\''):
@@ -70,88 +85,100 @@ class CommandCompleter(Completer):
 
     # -------------------- Command completion -------------------- #
     def _complete_command(self, text):
+        out = []
         for cmd in self.commands:
-            cmd_name = cmd.split(".")[0]  # top-level only
-            if self.ignore_case:
-                if cmd_name.lower().startswith(text.lower()):
-                    yield Completion(cmd_name, start_position=-len(text))
-            else:
-                if cmd_name.startswith(text):
-                    yield Completion(cmd_name, start_position=-len(text))
+            cmd_name = cmd.split(".")[0]
+            match = cmd_name.lower().startswith(text.lower()) if self.ignore_case else cmd_name.startswith(text)
+            if match:
+                out.append(Completion(cmd_name, start_position=-len(text)))
+        return out
 
-    # -------------------- Subcommand / flag completion -------------------- #
-    def _complete_deterministic(self, last_token, text_before_cursor):
-        found = False
+    # -------------------- Deterministic completion -------------------- #
+    def _complete_deterministic(self, last_token, text_before_cursor, token_index, tool_index):
+        out = []
+        found_path = False
 
-        # HelpIndexer suggestions
         if COMPLETE_ARGS:
             suggested = self.help_indexer.help_indexer.get_suggested(text_before_cursor)
             suggestions = suggested.get("suggestions", [])
-
             partial = suggested.get("partial", True)
 
             for s in suggestions:
-                if partial:
-                    yield Completion(s, start_position=-len(last_token))
-                else:
-                    yield Completion(s, start_position=0)
+                out.append(
+                    Completion(
+                        s,
+                        start_position=-len(last_token) if partial else 0,
+                    )
+                )
 
-        # Path completions
         if COMPLETE_PATH:
-            for c in self.complete_path(last_token, self.input_handler.shell.working_dir):
-                found = True
-                yield Completion(c.text, start_position=-len(last_token))
+            paths = self.complete_path(last_token, self.input_handler.shell.working_dir)
+            if paths:
+                found_path = True
+                out.extend(paths)
 
-        # History completions (only after previous token)
-        if not found and COMPLETE_HISTORY:
-            prev_token_len = len(last_token)
-            seen_tails = set()
+        if not found_path and COMPLETE_HISTORY:
+            if token_index == tool_index:
+                return out
+
+            seen = set()
             for entry in reversed(self.input_handler.get_history()):
                 words = entry.split()
-                if not words:
+                if len(words) <= token_index:
                     continue
-                tail = words[-1]
-                if tail in seen_tails:
+
+                candidate = words[token_index]
+                key = candidate.lower() if self.ignore_case else candidate
+                if key in seen:
                     continue
-                if self._matches_token(tail, last_token):
-                    yield Completion(tail, start_position=-prev_token_len)
-                    seen_tails.add(tail)
-    # -------------------- Subcommand / flag completion -------------------- #
-    def _complete_personalized(self, last_token, text_before_cursor):
-        return
+
+                if self._matches_token(candidate, last_token):
+                    out.append(Completion(candidate, start_position=-len(last_token)))
+                    seen.add(key)
+
+        return out
 
     # -------------------- Utility -------------------- #
     def _matches_token(self, candidate, token):
-        if self.ignore_case:
-            return candidate.lower().startswith(token.lower())
-        return candidate.startswith(token)
+        return candidate.lower().startswith(token.lower()) if self.ignore_case else candidate.startswith(token)
 
     # -------------------- Main entry -------------------- #
     def get_completions(self, document, complete_event):
-        text_before_cursor = document.text_before_cursor
-        tokens = text_before_cursor.split()
+        text = document.text_before_cursor
+        tokens = text.split()
+        candidates = []
 
-        # No tokens: suggest top-level commands
         if not tokens:
-            for c in self._complete_command(""):
+            candidates.extend(self._complete_command(""))
+            for c in self._dedupe(candidates):
                 yield c
             return
 
-        # Guess Tool
-        tool_offset = tokens[0].strip() == "sudo"
-        tool_index = 0 if not tool_offset else 1
-        if len(tokens) == tool_index + 1 and not text_before_cursor.endswith(" "):
-            first_word = tokens[tool_index]
-            for c in self._complete_command(first_word):
-                yield c
+        tool_offset = tokens[0] == "sudo"
+        tool_index = 1 if tool_offset else 0
+
+        if len(tokens) == tool_index + 1 and not text.endswith(" "):
+            first = tokens[tool_index]
+            candidates.extend(self._complete_command(first))
             if COMPLETE_PATH:
-                for c in self.complete_path(first_word, self.input_handler.shell.working_dir):
-                    yield Completion(c.text, start_position=-len(first_word))
+                candidates.extend(
+                    self.complete_path(first, self.input_handler.shell.working_dir)
+                )
+            for c in self._dedupe(candidates):
+                yield c
             return
 
-        # Guess deterministically
         last_token = tokens[-1]
-        for c in self._complete_deterministic(last_token, text_before_cursor.removeprefix("sudo")):
+        candidates.extend(
+            self._complete_deterministic(
+                last_token,
+                text.removeprefix("sudo "),
+                token_index=len(tokens) - 1,
+                tool_index=tool_index,
+            )
+        )
+
+        for c in self._dedupe(candidates):
             yield c
 
 

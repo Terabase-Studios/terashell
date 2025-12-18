@@ -349,7 +349,7 @@ class HelpIndexer:
                     if filtered >= MAX_FILTERED:
                         break
                     continue
-
+                print(f"DEBUG: Found subcommand: {subcommand}") # ADDED DEBUG PRINT
                 subcommands.append(subcommand)
 
         return subcommands
