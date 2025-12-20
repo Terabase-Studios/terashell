@@ -64,13 +64,16 @@ class TeraShell:
         self.active_venv_version = None
         self.instance = instance
         self.shell_file = shell_file
+        self.cmd_check = None
 
         if "VIRTUAL_ENV" in os.environ:
             self.command_handler._cmd_activate([os.environ.get("VIRTUAL_ENV")])
 
     def run(self, command: str):
         try:
-            subprocess.run(command, shell=True, stdout=sys.stdout, stderr=sys.stderr, env={**os.environ, "FORCE_COLOR": "1"},)
+            result = subprocess.run(command, shell=True, stdout=sys.stdout, stderr=sys.stderr, env={**os.environ, "FORCE_COLOR": "1"},)
+            self.input_handler.history.set_last_valid(result.returncode == 0)
+
         except Exception as e:
             print(f"{SHELL_NAME} error: {e}")
 

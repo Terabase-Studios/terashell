@@ -6,7 +6,7 @@ This document outlines the development tasks required for the TeraShell 0.3.0 re
 ## Regressions and Clarifications
 
 *   **1. Decouple `install.sh` PATH setup from Shell Application**
-    *   **Goal**: The choice to add `terashell-shell` to the system PATH should be independent of setting it as a login shell for users. The installer should always register the shell wrapper in `/etc/shells`, but the wrapper's location will depend on the user's choice.
+    *   **Goal [COMPLETED]**: The choice to add `terashell-shell` to the system PATH should be independent of setting it as a login shell for users. The installer should always register the shell wrapper in `/etc/shells`, but the wrapper's location will depend on the user's choice.
     *   **Affected Files**: `scripts/install.sh`.
 
 *   **2. Refine Background Process Handling for Command Chains**
@@ -62,7 +62,7 @@ This document outlines the development tasks required for the TeraShell 0.3.0 re
 ## New Features
 
 *   **1. Implement User Configuration Management**
-    *   **Goal**: Implement saving and loading user configuration from `~/.TeraShell/config.toml` (or similar file format) in TeraShell's `APP_DIR`. This will allow users to customize colors, prompt layout, and features without editing the source code.
+    *   **Goal [IN PROGRESS]**: Implement saving and loading user configuration from `~/.TeraShell/config.toml` (or similar file format) in TeraShell's `APP_DIR`. This will allow users to customize colors, prompt layout, and features without editing the source code.
     *   **Affected Files**: `src/config.py`, potentially a new config parsing module.
 
 *   **2. Implement Autocomplete for Compound Commands**
@@ -90,7 +90,7 @@ This document outlines the development tasks required for the TeraShell 0.3.0 re
     *   **Affected Files**: `src/commands.py` and potentially `src/shell.py`.
 
 *   **8. Improved Theming**
-    *   **Goal**: Expand on the external configuration to allow for full theming of the shell.
+    *   **Goal [COMPLETED]**: Expand on the external configuration to allow for full theming of the shell.
     *   **Affected Files**: `src/input.py`, `src/shell.py`, and the new config module.
 
 *   **9. Implement `instr` Execution Command**

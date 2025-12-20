@@ -8,10 +8,13 @@ VERSION = "0.3.2"
 # Cache files
 APP_DIR = os.path.expanduser(f"~/.{SHELL_NAME}")
 makedirs(APP_DIR, exist_ok=True)
-HISTORY_FILE = os.path.join(APP_DIR, "history")
+HISTORY_FILE = os.path.join(APP_DIR, "history.txt")
 HELP_FILE = os.path.join(APP_DIR, "cmd_help.json")
 INSTANCE_FILE = os.path.join(APP_DIR, "instances.json")
 INSTR_FILE = os.path.join(APP_DIR, "instructions.json")
+
+# For history
+IGNORE_SPACE = True
 
 # Waved warning files
 DISABLED_WARN_DIR = os.path.join(APP_DIR, "disabled_warn_files")
@@ -24,7 +27,7 @@ ONE_FLAG_PER_GROUP = True
 COMPLETE_PATH = True
 COMPLETE_ARGS = True
 COMPLETE_HISTORY = True
-ALWAYS_SUGGEST_HISTORY = False
+ALWAYS_SUGGEST_HISTORY = True
 
 PROMPT_HIGHLIGHTING = True
 
