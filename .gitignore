@@ -183,3 +183,4 @@ cython_debug/
 
 secrets/
 #GEMINI.md
+/src/blank.py

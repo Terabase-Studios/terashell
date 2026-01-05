@@ -476,10 +476,15 @@ class HelpIndexer:
 
         # Deduplicate and sort (shorter flags first)
         suggestions = sorted(set(suggestions), key=lambda x: (len(x), x), reverse=True)
+        subcommand_suggestions = [i for i in suggestions if not i.startswith("-") and not i.startswith("/")]
+        option_suggestions = [i for i in suggestions if i.startswith("-") or i.startswith("/")]
+        suggestions =  subcommand_suggestions + option_suggestions
 
         return {
             "command": tool,
             "subcommand": typed_sub,
             "suggestions": suggestions,
+            "subcommand_suggestions": subcommand_suggestions,
+            "option_suggestions": option_suggestions,
             "partial": partial,
         }

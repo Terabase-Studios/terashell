@@ -17,7 +17,7 @@ failed_to_start = False
 
 def start_shell(shell_script):
     global times_critical
-    from config import SHELL_NAME, IS_UNIX
+    from config import SHELL_NAME, IS_UNIX, IS_WINDOWS
     # Handle instance safely if possible
     try:
         instance = shell_script.handle_instance()
@@ -47,6 +47,10 @@ def start_shell(shell_script):
                 print(f"{BOLD}Multiple critical errors!{RESET}\n")
             fallback()
             return
+
+        elif IS_WINDOWS:
+            sys.exit(-1)
+
         else:
             time.sleep(1)
             print(f"Restarting {SHELL_NAME}...")

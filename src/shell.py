@@ -72,7 +72,7 @@ class TeraShell:
     def run(self, command: str):
         try:
             result = subprocess.run(command, shell=True, stdout=sys.stdout, stderr=sys.stderr, env={**os.environ, "FORCE_COLOR": "1"},)
-            self.input_handler.history.set_last_valid(result.returncode == 0)
+            self.input_handler.history.set_last_exit_code(result.returncode)
 
         except Exception as e:
             print(f"{SHELL_NAME} error: {e}")
