@@ -1,25 +1,17 @@
 import os
-import hashlib
 import json
-import time
-import datetime
 from collections import defaultdict
-from string import whitespace
 
 from prompt_toolkit import PromptSession
-from prompt_toolkit.completion import Completer, Completion, ThreadedCompleter
+from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.styles import Style
 from prompt_toolkit.shortcuts import CompleteStyle
-from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.keys import Keys
-from prompt_toolkit.filters import Condition
-from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 
 
-from config import AUTO_COMPLETE, HISTORY_FILE, PROMPT_HIGHLIGHTING, ALWAYS_SUGGEST_HISTORY, \
-    COMPLETE_PATH, COMPLETE_ARGS, COMPLETE_HISTORY, COMMAND_LINKING_SYMBOLS, IGNORE_SPACE
+from config import AUTO_COMPLETE, HISTORY_FILE, PROMPT_HIGHLIGHTING, COMPLETE_COMMAND, \
+    COMPLETE_PATHS, COMPLETE_ARGS, COMPLETE_HISTORY, COMMAND_LINKING_SYMBOLS, IGNORE_SPACE
 from indexer import CommandIndexer
 from prompt_toolkit.key_binding import KeyBindings
 
@@ -85,20 +77,22 @@ class CommandCompleter(Completer):
 
     # -------------------- Path completion -------------------- #
     def complete_path(self, text_before_cursor, working_dir=None):
-        if not text_before_cursor or text_before_cursor[-1] == " ":
+        if not text_before_cursor or text_before_cursor[-1] == " " or text_before_cursor[-1] == "~":
             return []
 
         text_before_cursor = text_before_cursor.split()[-1]
 
-        text = os.path.expanduser(text_before_cursor)
+        text_before_expanded = text_before_cursor
+        text_before_cursor = os.path.expanduser(text_before_cursor)
+        expanded = not text_before_expanded == text_before_cursor
 
         # Find last slash of either type
-        last_slash = max(text.rfind("/"), text.rfind("\\"))
+        last_slash = max(text_before_cursor.rfind("/"), text_before_cursor.rfind("\\"))
 
         if last_slash != -1:
             # Split cleanly
-            dir_part = text[:last_slash + 1]
-            fragment = text[last_slash + 1:]
+            dir_part = text_before_cursor[:last_slash + 1]
+            fragment = text_before_cursor[last_slash + 1:]
 
             # Extend working directory
             if working_dir:
@@ -122,13 +116,17 @@ class CommandCompleter(Completer):
         dir_part, file_part = os.path.split(text_before_cursor)
 
         for path in paths:
-            formatted_path = self._format_path(path, working_dir)
+            formatted_path, is_absolute = self._format_path(path, working_dir)
+
+            quoted = formatted_path.startswith("\"") or formatted_path.startswith("\'")
+            if quoted and expanded:
+                continue
 
             out.append(
                 Completion(
                     formatted_path,
-                    start_position=-len(file_part),
-                    style="class:quotes" if formatted_path.startswith("\"") or formatted_path.startswith("\'") else "class:path"
+                    start_position=(-len(file_part) - 1) if is_absolute else - len(text_before_cursor),
+                    style="class:quotes" if quoted else "class:path"
                 )
             )
         return out
@@ -179,11 +177,15 @@ class CommandCompleter(Completer):
 
     def _format_path(self, path, working_dir):
         no_quotes = path.strip("\"\'")
+        is_absolute = os.path.isabs(no_quotes)
         if working_dir and no_quotes.startswith(working_dir):
             no_quotes = no_quotes.removeprefix(working_dir).lstrip("\\/")
         if any(ch in no_quotes for ch in ' \t\n"\''):
-            return f'"{no_quotes}"'
-        return no_quotes
+            if is_absolute:
+                return f'"\\{no_quotes}"', is_absolute
+            else:
+                return f'"{no_quotes}"', is_absolute
+        return no_quotes, False
 
     # -------------------- Command completion -------------------- #
     def _complete_command(self, text, no_sudo=False):
@@ -237,14 +239,14 @@ class CommandCompleter(Completer):
                     )
                 )
 
-        if COMPLETE_PATH:
+        if COMPLETE_PATHS:
             paths = self.complete_path(text_before_cursor, self.input_handler.shell.working_dir)
             if paths:
                 found_path = True
                 out.extend(paths)
 
-        if (not found_path or ALWAYS_SUGGEST_HISTORY) and COMPLETE_HISTORY:
-            out.extend(self._complete_history(text_before_cursor, tool_index, token_index, last_token))
+        if COMPLETE_HISTORY:
+            out = self._complete_history(text_before_cursor, tool_index, token_index, last_token) + out
 
         return out
 
@@ -253,38 +255,6 @@ class CommandCompleter(Completer):
         seen = set()
         history = reversed(self.input_handler.get_history())
 
-        # --------------------
-        # Mode 1: Empty buffer → macro replay
-        # --------------------
-        if text_before_cursor.strip() == "":
-            for entry in history:
-                entry = entry.strip()
-                if not entry:
-                    continue
-
-                words = entry.split()
-                if len(words) <= tool_index:
-                    continue
-
-                remainder = " ".join(words[tool_index:])
-                key = remainder.lower() if self.ignore_case else remainder
-                if key in seen:
-                    continue
-
-                out.append(
-                    Completion(
-                        remainder,
-                        start_position=0,
-                        style="class:arg",
-                    )
-                )
-                seen.add(key)
-
-            return out
-
-        # --------------------
-        # Mode 2: Token-based history completion
-        # --------------------
         if token_index == tool_index:
             return out
 
@@ -298,11 +268,11 @@ class CommandCompleter(Completer):
             if key in seen:
                 continue
 
-            if self._matches_token(candidate, last_token):
+            if self._matches_token(candidate, last_token) or text_before_cursor.endswith(" "):
                 out.append(
                     Completion(
                         candidate,
-                        start_position=-len(last_token) + whitespace,
+                        start_position = -len(last_token) if not text_before_cursor.endswith(" ") else 0,
                         style="class:link",
                     )
                 )
@@ -345,8 +315,9 @@ class CommandCompleter(Completer):
 
             if len(tokens) == tool_index + 1 and not text.endswith(" "):
                 first = tokens[tool_index]
-                candidates.extend(self._complete_command(first, no_sudo=tool_offset))
-                if COMPLETE_PATH:
+                if COMPLETE_COMMAND:
+                    candidates.extend(self._complete_command(first, no_sudo=tool_offset))
+                if COMPLETE_PATHS:
                     candidates.extend(
                         self.complete_path(start_whitespace+first+end_whitespace, self.input_handler.shell.working_dir)
                     )
@@ -359,7 +330,7 @@ class CommandCompleter(Completer):
                 self._complete_deterministic(
                     last_token,
                     text,
-                    token_index=len(tokens) - 1,
+                    token_index=len(tokens),
                     tool_index=tool_index,
                 )
             )
