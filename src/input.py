@@ -4,6 +4,8 @@ import json
 import time
 import datetime
 from collections import defaultdict
+from string import whitespace
+
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import Completer, Completion, ThreadedCompleter
 from prompt_toolkit.history import FileHistory
@@ -83,7 +85,11 @@ class CommandCompleter(Completer):
 
     # -------------------- Path completion -------------------- #
     def complete_path(self, text_before_cursor, working_dir=None):
-        whitespace = 1 if text_before_cursor[-1] == " " else 0
+        if not text_before_cursor or text_before_cursor[-1] == " ":
+            return []
+
+        text_before_cursor = text_before_cursor.split()[-1]
+
         text = os.path.expanduser(text_before_cursor)
 
         # Find last slash of either type
@@ -117,10 +123,11 @@ class CommandCompleter(Completer):
 
         for path in paths:
             formatted_path = self._format_path(path, working_dir)
+
             out.append(
                 Completion(
                     formatted_path,
-                    start_position=-len(file_part) + whitespace,
+                    start_position=-len(file_part),
                     style="class:quotes" if formatted_path.startswith("\"") or formatted_path.startswith("\'") else "class:path"
                 )
             )
@@ -179,12 +186,14 @@ class CommandCompleter(Completer):
         return no_quotes
 
     # -------------------- Command completion -------------------- #
-    def _complete_command(self, text):
+    def _complete_command(self, text, no_sudo=False):
         out = []
         for cmd in self.commands:
             cmd_name = cmd.split(".")[0]
             match = cmd_name.lower().startswith(text.lower()) if self.ignore_case else cmd_name.startswith(text)
             if cmd_name == "sudo":
+                if no_sudo:
+                    continue
                 color = "class:sudo"
             elif cmd_name in self.built_in_commands:
                 color = "class:built_in"
@@ -203,7 +212,11 @@ class CommandCompleter(Completer):
         if COMPLETE_ARGS:
             suggested = self.help_indexer.help_indexer.get_suggested(text_before_cursor)
             command_suggestions = suggested.get("subcommand_suggestions", [])
-            optional_suggestions = suggested.get("option_suggestions", [])
+            if text_before_cursor[-1] == " " or last_token.startswith("-") or last_token.startswith("--") or last_token.startswith("/"):
+                optional_suggestions = suggested.get("option_suggestions", [])
+            else:
+                optional_suggestions = suggested.get("optional_suggestions", [])
+
             partial = suggested.get("partial", True)
 
             for s in command_suggestions:
@@ -225,29 +238,75 @@ class CommandCompleter(Completer):
                 )
 
         if COMPLETE_PATH:
-            paths = self.complete_path(last_token, self.input_handler.shell.working_dir)
+            paths = self.complete_path(text_before_cursor, self.input_handler.shell.working_dir)
             if paths:
                 found_path = True
                 out.extend(paths)
 
         if (not found_path or ALWAYS_SUGGEST_HISTORY) and COMPLETE_HISTORY:
-            if token_index == tool_index:
-                return out
+            out.extend(self._complete_history(text_before_cursor, tool_index, token_index, last_token))
 
-            seen = set()
-            for entry in reversed(self.input_handler.get_history()):
-                words = entry.split()
-                if len(words) <= token_index:
+        return out
+
+    def _complete_history(self, text_before_cursor, tool_index, token_index, last_token):
+        out = []
+        seen = set()
+        history = reversed(self.input_handler.get_history())
+
+        # --------------------
+        # Mode 1: Empty buffer → macro replay
+        # --------------------
+        if text_before_cursor.strip() == "":
+            for entry in history:
+                entry = entry.strip()
+                if not entry:
                     continue
 
-                candidate = words[token_index]
-                key = candidate.lower() if self.ignore_case else candidate
+                words = entry.split()
+                if len(words) <= tool_index:
+                    continue
+
+                remainder = " ".join(words[tool_index:])
+                key = remainder.lower() if self.ignore_case else remainder
                 if key in seen:
                     continue
 
-                if self._matches_token(candidate, last_token):
-                    out.append(Completion(candidate, start_position=-len(last_token), style="class:link"))
-                    seen.add(key)
+                out.append(
+                    Completion(
+                        remainder,
+                        start_position=0,
+                        style="class:arg",
+                    )
+                )
+                seen.add(key)
+
+            return out
+
+        # --------------------
+        # Mode 2: Token-based history completion
+        # --------------------
+        if token_index == tool_index:
+            return out
+
+        for entry in history:
+            words = entry.split()
+            if len(words) <= token_index:
+                continue
+
+            candidate = words[token_index]
+            key = candidate.lower() if self.ignore_case else candidate
+            if key in seen:
+                continue
+
+            if self._matches_token(candidate, last_token):
+                out.append(
+                    Completion(
+                        candidate,
+                        start_position=-len(last_token) + whitespace,
+                        style="class:link",
+                    )
+                )
+                seen.add(key)
 
         return out
 
@@ -263,7 +322,7 @@ class CommandCompleter(Completer):
                 text="",
                 display=f"[{header}]: {message}",
                 start_position=0,
-                style="class:sudo"
+                style="class:error"
             )
 
     # -------------------- Main entry -------------------- #
@@ -281,14 +340,15 @@ class CommandCompleter(Completer):
 
             tool_offset = tokens[0] == "sudo"
             tool_index = 1 if tool_offset else 0
-            whitespace = " " if text[-1] == " " else ""
+            start_whitespace = " " if text[0] == " " else ""
+            end_whitespace = " " if text[-1] == " " else ""
 
             if len(tokens) == tool_index + 1 and not text.endswith(" "):
                 first = tokens[tool_index]
-                candidates.extend(self._complete_command(first))
+                candidates.extend(self._complete_command(first, no_sudo=tool_offset))
                 if COMPLETE_PATH:
                     candidates.extend(
-                        self.complete_path(first+whitespace, self.input_handler.shell.working_dir)
+                        self.complete_path(start_whitespace+first+end_whitespace, self.input_handler.shell.working_dir)
                     )
                 for c in self._dedupe(candidates):
                     yield c
@@ -298,12 +358,11 @@ class CommandCompleter(Completer):
             candidates.extend(
                 self._complete_deterministic(
                     last_token,
-                    text.removeprefix("sudo "),
+                    text,
                     token_index=len(tokens) - 1,
                     tool_index=tool_index,
                 )
             )
-
             for c in self._dedupe(candidates):
                 yield c
         except Exception as e:
@@ -320,6 +379,7 @@ class CommandCompleter(Completer):
                 filename = last_frame.tb_frame.f_code.co_filename
                 function_name = last_frame.tb_frame.f_code.co_name
                 line_number = last_frame.tb_lineno
+
 
                 messages = [str(e), str(function_name), str(line_number), "PLEASE REPORT"]
                 yield from self._yield_autocomplete_errors(messages=messages)
