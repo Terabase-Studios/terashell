@@ -246,11 +246,32 @@ class CommandCompleter(Completer):
                 out.extend(paths)
 
         if COMPLETE_HISTORY:
-            out = self._complete_history(text_before_cursor, tool_index, token_index, last_token) + out
+            out = self._complete_history(text_before_cursor, tool_index, token_index, last_token, self.input_handler.shell.working_dir) + out
 
         return out
 
-    def _complete_history(self, text_before_cursor, tool_index, token_index, last_token):
+    def _complete_history(self, text_before_cursor, tool_index, token_index, last_token, working_dir):
+        def _looks_like_path(token: str) -> bool:
+            return (
+                "/" in token
+                or "\\" in token
+                or token.startswith(".")
+                or token.startswith("~")
+                or (len(token) >= 2 and token[1] == ":")  # Windows drive
+            )
+        def _verify_path(token: str, working_dir: str | None) -> bool:
+            expanded = os.path.expanduser(token)
+
+            if not os.path.isabs(expanded) and working_dir:
+                expanded = os.path.join(working_dir, expanded)
+
+            # exact path exists
+            if os.path.exists(expanded):
+                return True
+
+            # parent exists (user still typing filename)
+            parent = os.path.dirname(expanded)
+            return bool(parent) and os.path.isdir(parent)
         out = []
         seen = set()
         history = reversed(self.input_handler.get_history())
@@ -278,9 +299,14 @@ class CommandCompleter(Completer):
                         continue
 
             candidate = words[token_index if text_before_cursor.endswith(" ") else token_index - 1 ]
+
             key = candidate.lower() if self.ignore_case else candidate
             if key in seen:
                 continue
+
+            if _looks_like_path(candidate):
+                if not _verify_path(candidate, working_dir):
+                    continue
 
             if self._matches_token(candidate, last_token) or text_before_cursor.endswith(" "):
                 out.append(
