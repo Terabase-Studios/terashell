@@ -188,11 +188,12 @@ class CommandCompleter(Completer):
         return no_quotes, False
 
     # -------------------- Command completion -------------------- #
-    def _complete_command(self, text, no_sudo=False):
+    def _complete_command(self, text, no_sudo=False, built_in_index = 0):
         out = []
         for cmd in self.commands:
             cmd_name = cmd.split(".")[0]
             match = cmd_name.lower().startswith(text.lower()) if self.ignore_case else cmd_name.startswith(text)
+
             if cmd_name == "sudo":
                 if no_sudo:
                     continue
@@ -203,7 +204,27 @@ class CommandCompleter(Completer):
                 color = "class:command"
 
             if match:
-                out.append(Completion(cmd_name, start_position=-len(text), style=color))
+                out.append(Completion(cmd_name.split()[0], start_position=-len(text), style=color))
+        return out
+
+    def _complete_build_in_arg(self, text, built_in_index=1):
+        out = []
+        text_tokens = text.split()
+        text_arg = text_tokens[built_in_index] if built_in_index < len(text_tokens) else ""
+
+        for cmd in self.built_in_commands:
+            cmd_tokens = cmd.split()
+            if built_in_index >= len(cmd_tokens):
+                continue
+            if cmd_tokens[0] != text_tokens[0]:
+                continue
+            cmd_arg = cmd_tokens[built_in_index]
+
+            match = cmd_arg.lower().startswith(text_arg.lower()) if self.ignore_case else cmd_arg.startswith(text_arg)
+            match = match or text.endswith(" ")
+
+            if match:
+                out.append(Completion(cmd_arg, start_position=-len(text_arg), style="class:arg"))
         return out
 
     # -------------------- Deterministic completion -------------------- #
@@ -212,6 +233,7 @@ class CommandCompleter(Completer):
         found_path = False
 
         if COMPLETE_ARGS:
+            out += self._complete_build_in_arg(text_before_cursor.removeprefix("sudo"))
             suggested = self.help_indexer.help_indexer.get_suggested(text_before_cursor)
             command_suggestions = suggested.get("subcommand_suggestions", [])
             if text_before_cursor[-1] == " " or last_token.startswith("-") or last_token.startswith("--") or last_token.startswith("/"):
@@ -324,13 +346,13 @@ class CommandCompleter(Completer):
     def _matches_token(self, candidate, token):
         return candidate.lower().startswith(token.lower()) if self.ignore_case else candidate.startswith(token)
 
-    def _yield_autocomplete_errors(self, header="autocomplete error", messages=None):
+    def _yield_autocomplete_errors(self, messages=None):
         if messages is None:
             messages = ["NULL", "NULL", "NULL"]
         for message in messages:
             yield Completion(
                 text="",
-                display=f"[{header}]: {message}",
+                display=f"{message}",
                 start_position=0,
                 style="class:error"
             )
