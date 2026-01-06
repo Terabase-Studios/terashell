@@ -255,15 +255,29 @@ class CommandCompleter(Completer):
         seen = set()
         history = reversed(self.input_handler.get_history())
 
+        tokens = text_before_cursor.split()
+
         if token_index == tool_index:
             return out
+
+        prev_typed = tokens[token_index - 1] if token_index > 0 else None
+        prev_typed_minus_one = tokens[token_index - 2] if token_index > 0 else None
 
         for entry in history:
             words = entry.split()
             if len(words) <= token_index:
                 continue
 
-            candidate = words[token_index]
+            # context lock
+            if token_index > tool_index:
+                if text_before_cursor.endswith(" "):
+                    if words[token_index - 1] != prev_typed:
+                        continue
+                else:
+                    if words[token_index - 2] != prev_typed_minus_one:
+                        continue
+
+            candidate = words[token_index if text_before_cursor.endswith(" ") else token_index - 1 ]
             key = candidate.lower() if self.ignore_case else candidate
             if key in seen:
                 continue
@@ -272,7 +286,7 @@ class CommandCompleter(Completer):
                 out.append(
                     Completion(
                         candidate,
-                        start_position = -len(last_token) if not text_before_cursor.endswith(" ") else 0,
+                        start_position=-len(last_token) if not text_before_cursor.endswith(" ") else 0,
                         style="class:link",
                     )
                 )
