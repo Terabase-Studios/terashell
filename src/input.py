@@ -189,29 +189,35 @@ class CommandCompleter(Completer):
 
     # -------------------- Command completion -------------------- #
     def _complete_command(self, text, no_sudo=False, built_in_index = 0):
-        out = []
+        sudo = []
+        built_in = []
+        command = []
         for cmd in self.commands:
             cmd_name = cmd.split(".")[0]
             match = cmd_name.lower().startswith(text.lower()) if self.ignore_case else cmd_name.startswith(text)
-
-            if cmd_name == "sudo":
-                if no_sudo:
-                    continue
-                color = "class:sudo"
-            elif cmd_name in self.built_in_commands:
-                color = "class:built_in"
-            else:
-                color = "class:command"
-
             if match:
-                out.append(Completion(cmd_name.split()[0], start_position=-len(text), style=color))
-        return out
+                if cmd_name == "sudo":
+                    if no_sudo:
+                        continue
+                    color = "class:sudo"
+                    sudo.append(Completion(cmd_name.split()[0], start_position=-len(text), style=color))
+
+                elif cmd_name in self.built_in_commands:
+                    color = "class:built_in"
+                    built_in.append(Completion(cmd_name.split()[0], start_position=-len(text), style=color))
+
+                else:
+                    color = "class:command"
+                    command.append(Completion(cmd_name.split()[0], start_position=-len(text), style=color))
+
+        return sudo + built_in + command
 
     def _complete_build_in_arg(self, text, built_in_index=1):
         out = []
         text_tokens = text.split()
         text_arg = text_tokens[built_in_index] if built_in_index < len(text_tokens) else ""
-
+        if not text_tokens:
+            return []
         for cmd in self.built_in_commands:
             cmd_tokens = cmd.split()
             if built_in_index >= len(cmd_tokens):
@@ -375,8 +381,13 @@ class CommandCompleter(Completer):
             start_whitespace = " " if text[0] == " " else ""
             end_whitespace = " " if text[-1] == " " else ""
 
+            # TODO: MAKE "sudo " autocomplete
             if len(tokens) == tool_index + 1 and not text.endswith(" "):
-                first = tokens[tool_index]
+                try:
+                    first = tokens[tool_index]
+                except IndexError:
+                    first = tokens[0]
+
                 if COMPLETE_COMMAND:
                     candidates.extend(self._complete_command(first, no_sudo=tool_offset))
                 if COMPLETE_PATHS:
