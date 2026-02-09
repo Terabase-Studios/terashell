@@ -17,31 +17,49 @@ TeraShell is a modern, cross-platform command-line shell designed for developer 
 
 ## Installation
 
+TeraShell now features a safer, more user-friendly installer that defaults to a local, user-specific installation, which does not require administrator or `sudo` privileges.
+
 ### Linux & macOS
 
-1.  Clone the repository:
+1.  **Clone the repository:**
     ```sh
     git clone https://github.com/Terabase-Studios/TeraShell.git
     cd TeraShell
     ```
-2.  Run the installation script:
+
+2.  **Run the installation script:**
     ```sh
-    sudo sh ./scripts/install.sh
+    sh ./installers/install.sh
     ```
-3.  The script will guide you through the process, including an option to set TeraShell as your default shell. Log out and back in for the changes to take effect.
+    The script will install TeraShell locally to `~/.terashell` and add a launcher to `~/.local/bin`. It will guide you if `~/.local/bin` needs to be added to your `PATH`.
+
+3.  **Activate the shell (Optional):**
+    To make TeraShell your primary shell, run the activation script:
+    ```sh
+    sh ./installers/activate.sh
+    ```
+    This script will offer two choices:
+    *   **Safe Activation (Recommended):** Adds `exec terashell` to your `.bashrc` or `.zshrc`. This is easily reversible.
+    *   **Login Shell Activation (Risky):** Uses `chsh` to change your default login shell. **This can lock you out of your system if TeraShell fails.**
 
 ### Windows
 
-1.  Clone the repository:
+1.  **Clone the repository:**
     ```sh
     git clone https://github.com/Terabase-Studios/TeraShell.git
     cd TeraShell
     ```
-2.  Run the installation script:
+2.  **Run the installation script:**
     ```bat
-    .\scripts\install.bat
+    .\installers\install.bat
     ```
-3.  The script will prompt you to install for the current user or all users and will offer to add TeraShell to your PATH and create a Start Menu shortcut.
+    The script will guide you through the process, with the recommended option being an installation for the current user only. It will also offer to add TeraShell to your `PATH` and create a Start Menu shortcut.
+
+### Uninstallation
+
+To uninstall TeraShell, simply run the corresponding uninstaller script in the `installers` directory:
+*   **Linux/macOS:** `sh ./installers/uninstall.sh`
+*   **Windows:** `.\installers\uninstall.bat`
 
 ## Usage
 

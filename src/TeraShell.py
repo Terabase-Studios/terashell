@@ -88,7 +88,12 @@ def fallback(cmd=None):
     for cand in ["/bin/bash", "/bin/zsh", "/bin/sh"]:
         if os.path.exists(cand):
             print(f"{cand} found, starting...\n")
-            subprocess.run([cand])
+            if "bash" in cand:
+                subprocess.run([cand, "--noprofile", "--norc"])
+            elif "zsh" in cand:
+                subprocess.run([cand, "-f"])
+            else:
+                subprocess.run([cand])
             return
         else:
             print(f"{cand} not found")
