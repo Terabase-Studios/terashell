@@ -1,13 +1,14 @@
 import asyncio
 import os
 import subprocess
+import time
 from collections import deque
 from datetime import datetime
 from threading import Thread
 
 import psutil
-import time
 from prettytable import PrettyTable
+
 
 class BackgroundTask:
     def __init__(self, task_id, command, process):
@@ -46,6 +47,7 @@ class BackgroundTask:
 
     def __repr__(self):
         return f"[{self.id}] {self.status():<7}  {self.command}"
+
 
 class BackgroundTaskManager:
     def __init__(self):
@@ -175,6 +177,7 @@ class BackgroundTaskManager:
                 pass
         await asyncio.sleep(0.1)
 
+
 def create_btm() -> BackgroundTaskManager:
     """
     Create a BackgroundTaskManager with guaranteed cleanup on exit.
@@ -193,10 +196,9 @@ def create_btm() -> BackgroundTaskManager:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
-
     def handle_signal(signum, frame):
-        #print(f"\nReceived signal {signum}, shutting down…")
-        #loop.create_task(btm.shutdown())
+        # print(f"\nReceived signal {signum}, shutting down…")
+        # loop.create_task(btm.shutdown())
         # Do not exit immediately, give shutdown a chance
         pass
 

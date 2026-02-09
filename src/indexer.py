@@ -130,8 +130,6 @@ class HelpIndexer:
             )
             return result.stdout if result.stdout else None
 
-
-
     # ============================================================
     # Auto-generate help by running the tool
     # ============================================================
@@ -154,8 +152,8 @@ class HelpIndexer:
         if recursive_depth and len(base_cmd) >= recursive_depth:
             return None, None
 
-        #if spinner:
-            #spinner.text = f"Reading {" ".join(base_cmd)}..."
+        # if spinner:
+        # spinner.text = f"Reading {" ".join(base_cmd)}..."
 
         collected_help = ""
         for flag in HELP_FLAGS:
@@ -180,8 +178,7 @@ class HelpIndexer:
         if (not collected_help) or len(collected_help.splitlines()) < 1:
             if main:
                 print(f"Unable to find help for \"{tool_name}\"\nThe tool did not return any help text.")
-            return None, None # no help found
-
+            return None, None  # no help found
 
         if not collected_help or len(collected_help.splitlines()) <= 5 or previous_help == collected_help:
             return None, None
@@ -195,18 +192,19 @@ class HelpIndexer:
 
         main_branch = {"command": base_cmd, "options": options, "subcommands": [], "branches": {}}
         commands = []
-        #print("\n", main_branch)
-        #print("\n", potential_commands)
+        # print("\n", main_branch)
+        # print("\n", potential_commands)
         for command in potential_commands:
             if command in base_cmd:
                 continue
             if command == tool_name:
                 continue
-            branch, subcommand_help = self.map_tool(command, base_cmd=base_cmd+[command], recursive_depth=recursive_depth, main=False, previous_help=collected_help, spinner=spinner)
+            branch, subcommand_help = self.map_tool(command, base_cmd=base_cmd + [command],
+                                                    recursive_depth=recursive_depth, main=False,
+                                                    previous_help=collected_help, spinner=spinner)
             if branch and collected_help != subcommand_help:
                 main_branch["branches"][command] = branch
                 commands.append(command)
-
 
         main_branch["subcommands"] = commands
 
@@ -337,7 +335,9 @@ class HelpIndexer:
             if line.startswith(" "):
                 no_tab_line = line.replace("\t", "").strip(" ")
                 # filter opt args or fragments
-                if no_tab_line.startswith("-") or no_tab_line.startswith("--") or no_tab_line.startswith("/") or no_tab_line.startswith("//") or no_tab_line.startswith("[") or no_tab_line.startswith("{"):
+                if no_tab_line.startswith("-") or no_tab_line.startswith("--") or no_tab_line.startswith(
+                        "/") or no_tab_line.startswith("//") or no_tab_line.startswith("[") or no_tab_line.startswith(
+                        "{"):
                     continue
                 try:
                     subcommand = no_tab_line.split()[0]
@@ -478,7 +478,7 @@ class HelpIndexer:
         suggestions = sorted(set(suggestions), key=lambda x: (len(x), x), reverse=True)
         subcommand_suggestions = [i for i in suggestions if not i.startswith("-") and not i.startswith("/")]
         option_suggestions = [i for i in suggestions if i.startswith("-") or i.startswith("/")]
-        suggestions =  subcommand_suggestions + option_suggestions
+        suggestions = subcommand_suggestions + option_suggestions
 
         return {
             "command": tool,

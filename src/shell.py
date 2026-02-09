@@ -16,10 +16,10 @@ from input import ShellInput
 
 try:
     import colorama
+
     colorama.init()
 except ImportError:
     pass
-
 
 INITIAL_PRINT = f"""
 Welcome to Terashell!
@@ -37,6 +37,7 @@ WHITE = "\033[37m"
 BRIGHT_BLACK = "\033[90m"
 DARK_RED = "\033[38;2;139;0;0m"
 
+
 def get_current_user():
     if IS_UNIX:
         try:
@@ -47,8 +48,9 @@ def get_current_user():
     else:  # Windows
         return os.environ.get("USERNAME", "unknown")
 
+
 def instance_file(instance, file):
-    return file.replace(os.path.basename(file), os.path.basename(file)+f"-{instance}") if instance else file
+    return file.replace(os.path.basename(file), os.path.basename(file) + f"-{instance}") if instance else file
 
 
 class TeraShell:
@@ -71,8 +73,9 @@ class TeraShell:
 
     def run(self, command: str):
         try:
-            result = subprocess.run(command, shell=True, stdout=sys.stdout, stderr=sys.stderr, env={**os.environ, "FORCE_COLOR": "1"},)
-            #self.input_handler.history.set_last_exit_code(result.returncode)
+            result = subprocess.run(command, shell=True, stdout=sys.stdout, stderr=sys.stderr,
+                                    env={**os.environ, "FORCE_COLOR": "1"}, )
+            # self.input_handler.history.set_last_exit_code(result.returncode)
 
         except Exception as e:
             print(f"{SHELL_NAME} error: {e}")
@@ -88,8 +91,9 @@ class TeraShell:
                 venv_version = f"{self.active_venv_version}@" if self.active_venv_version else ""
                 venv = f"[{MAIN_COLOR}{venv_version}{self.active_venv}{RESET}]{BACK_COLOR}-{RESET}" if self.active_venv else ""
                 user = f"[{MAIN_COLOR}{user}@{socket.gethostname()}{BACK_COLOR}{RESET}]{BACK_COLOR}-{RESET}" if SHOW_USER else ""
-                prefix = ANSI(f"{BACK_COLOR}TS-{RESET}{instance}{venv}{user}[{MAIN_COLOR}{self.working_dir}{RESET}]{BACK_COLOR}\n"
-                              f"└> {RESET}")
+                prefix = ANSI(
+                    f"{BACK_COLOR}TS-{RESET}{instance}{venv}{user}[{MAIN_COLOR}{self.working_dir}{RESET}]{BACK_COLOR}\n"
+                    f"└> {RESET}")
                 line = self.input_handler.input(cmd_prefix=prefix)
             except KeyboardInterrupt:
                 print()

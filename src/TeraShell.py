@@ -15,6 +15,7 @@ warn = True
 
 failed_to_start = False
 
+
 def start_shell(shell_script):
     global times_critical
     from config import SHELL_NAME, IS_UNIX, IS_WINDOWS
@@ -32,8 +33,8 @@ def start_shell(shell_script):
         times_critical += 1
         if warn:
             print(f"{RED_BACKGROUND}{SHELL_NAME} unhandled error:{RESET}"
-                f"\n{RED}"
-            )
+                  f"\n{RED}"
+                  )
 
             traceback.print_exception(type(ex), ex, ex.__traceback__)
             print(f"\n\nPLEASE REPORT{RESET}")
@@ -56,6 +57,7 @@ def start_shell(shell_script):
             print(f"Restarting {SHELL_NAME}...")
             start_shell(shell_script)
             return
+
 
 def import_shell_script():
     # Try to import the main shell script
@@ -80,6 +82,7 @@ def import_shell_script():
 
         return None
 
+
 def fallback(cmd=None):
     print("Attempting to start; bash, zsh, or sh")
     for cand in ["/bin/bash", "/bin/zsh", "/bin/sh"]:
@@ -96,6 +99,7 @@ def fallback(cmd=None):
         print("\nEmergency shell failed:", e)
         print("Try and boot with a live os to make repairs")
     sys.exit(1)
+
 
 def emergency_shell():
     print("System shell could not be started.")
@@ -147,6 +151,7 @@ def emergency_shell():
         except Exception as loop_err:
             print(f"Unexpected emergency loop error: {loop_err}")
 
+
 def main():
     # Non-interactive mode for scripts and tools like Cockpit/SSH
     # Executed via: terashell-shell -c "command"
@@ -155,7 +160,7 @@ def main():
             c_index = sys.argv.index('-c')
             # The command is everything after '-c'
             if c_index + 1 < len(sys.argv):
-                command_to_run = " ".join(sys.argv[c_index+1:])
+                command_to_run = " ".join(sys.argv[c_index + 1:])
                 # We run the command and let its stdout/stderr flow to the parent.
                 # This makes it behave like a standard non-interactive shell.
                 result = subprocess.run(command_to_run, shell=True, env=os.environ)

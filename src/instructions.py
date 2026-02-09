@@ -34,7 +34,7 @@ class InstructionHelper:
         return removed
 
     def list(self):
-        return "\n".join(f"{i+1}. {step}" for i, step in enumerate(self.steps))
+        return "\n".join(f"{i + 1}. {step}" for i, step in enumerate(self.steps))
 
     def clear(self):
         self.steps = []
@@ -48,4 +48,3 @@ class InstructionHelper:
         except Exception as e:
             print("Failed to save file: ", e)
             return False
-            

@@ -13,6 +13,7 @@ RED = "\033[91m"
 BOLD = "\033[1m"
 RESET = "\033[0m"
 
+
 class ShellCommands:
     def __init__(self, shell):
         self.shell = shell
@@ -27,8 +28,8 @@ class ShellCommands:
             "history clear": self._cmd_history,
             "activate": self._cmd_activate,
             "deactivate": self._cmd_deactivate,
-        #    "nest list": self._cmd_nest,
-        #    "nest": self._cmd_nest,
+            #    "nest list": self._cmd_nest,
+            #    "nest": self._cmd_nest,
             "instr add": self._cmd_instr,
             "instr remove": self._cmd_instr,
             "instr list": self._cmd_instr,
@@ -51,7 +52,7 @@ class ShellCommands:
             "history": "Managed stored inputs.",
             "activate": "Usage: \"activate <venv>\" Activate a Python virtual environment.",
             "deactivate": "Deactivate the current virtual environment.",
-        #    "nest": "Usage: Manage shell sub-instances with different saved data",
+            #    "nest": "Usage: Manage shell sub-instances with different saved data",
             "instr": f"Create an instruction list within {SHELL_NAME}.",
             "bg": "Manage background tasks. Create a background task with the \'&\' arg.",
         }
@@ -66,8 +67,8 @@ class ShellCommands:
             "history Clear": "Clear input history.",
             "activate": "Usage: \"activate <venv>\" Activate a Python virtual environment.",
             "deactivate": "Deactivate the current virtual environment.",
-        #    "nest": "Usage: \"nest <shell>\" Open a shell sub-instance with different saved data",
-        #    "nest list": "List all shell sub-instances",
+            #    "nest": "Usage: \"nest <shell>\" Open a shell sub-instance with different saved data",
+            #    "nest list": "List all shell sub-instances",
             "instr add": "Add a new instruction step.",
             "instr add-last": "Save the last executed command as an instruction.",
             "instr list": "List all instruction steps.",
@@ -120,7 +121,6 @@ class ShellCommands:
         header = f" Modified commands:"
         print(header, "\n", "-" * len(header))
         print(" ", ", ".join([i for i in self.get_commands() if i not in list(help.keys())]))
-
 
     def _cmd_exit(self, args):
         self.shell.running = False
@@ -201,8 +201,8 @@ class ShellCommands:
         try:
             import subprocess
             result = subprocess.run([python_exe, "--version"], capture_output=True, text=True)
-            version =  result.stdout.strip() if result.stdout else result.stderr.strip()
-            self.shell.active_venv_version = version.removeprefix("Python ") if  "3." in version else None
+            version = result.stdout.strip() if result.stdout else result.stderr.strip()
+            self.shell.active_venv_version = version.removeprefix("Python ") if "3." in version else None
         except Exception as e:
             self.shell.active_venv_version = "unknown"
 

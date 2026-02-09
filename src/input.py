@@ -1,21 +1,21 @@
-import os
 import json
+import os
 from collections import defaultdict
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.history import FileHistory
-from prompt_toolkit.lexers import Lexer
-from prompt_toolkit.styles import Style
-from prompt_toolkit.shortcuts import CompleteStyle
-
-
-from config import AUTO_COMPLETE, HISTORY_FILE, PROMPT_HIGHLIGHTING, COMPLETE_COMMAND, \
-    COMPLETE_PATHS, COMPLETE_ARGS, COMPLETE_HISTORY, COMMAND_LINKING_SYMBOLS, IGNORE_SPACE
-from indexer import CommandIndexer
 from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.lexers import Lexer
+from prompt_toolkit.shortcuts import CompleteStyle
+from prompt_toolkit.styles import Style
+
+from config import AUTO_COMPLETE, HISTORY_FILE, PROMPT_HIGHLIGHTING, COMPLETE_PATHS, COMPLETE_ARGS, COMPLETE_HISTORY, \
+    COMMAND_LINKING_SYMBOLS, IGNORE_SPACE
+from indexer import CommandIndexer
 
 kb = KeyBindings()
+
 
 @kb.add("enter")
 def accept_path_completion_or_submit(event):
@@ -29,9 +29,9 @@ def accept_path_completion_or_submit(event):
 
     # Only trigger special Enter behavior if last token looks like a path
     is_path_token = (
-        last_token.startswith(("~", "/", "\\"))  # starts like Unix/Windows path
-        or "\\" in last_token                    # contains backslash
-        or "/" in last_token                     # contains forward slash
+            last_token.startswith(("~", "/", "\\"))  # starts like Unix/Windows path
+            or "\\" in last_token  # contains backslash
+            or "/" in last_token  # contains forward slash
     )
 
     if state and state.completions and state.complete_index is not None and is_path_token:
@@ -45,7 +45,6 @@ def accept_path_completion_or_submit(event):
         buffer.validate_and_handle()
 
 
-
 class CommandCompleter(Completer):
     """
     Two-mode command completer:
@@ -53,7 +52,7 @@ class CommandCompleter(Completer):
     2. Body: subcommands, flags, paths, and history after the last token.
     """
 
-    def __init__(self, input_handler, extra_commands=None, ignore_case=True, completer_style = None):
+    def __init__(self, input_handler, extra_commands=None, ignore_case=True, completer_style=None):
         self.input_handler = input_handler
         self.help_indexer = input_handler.indexer
         self.ignore_case = ignore_case
@@ -106,11 +105,11 @@ class CommandCompleter(Completer):
         if "." in text_before_cursor:
             return []
 
-        paths =  self.complete_path_raw(
-                text_before_cursor,
-                working_dir,
-                ignore_case=self.ignore_case,
-            )
+        paths = self.complete_path_raw(
+            text_before_cursor,
+            working_dir,
+            ignore_case=self.ignore_case,
+        )
 
         out = []
         dir_part, file_part = os.path.split(text_before_cursor)
@@ -132,10 +131,10 @@ class CommandCompleter(Completer):
         return out
 
     def complete_path_raw(
-        self,
-        text_before_cursor: str,
-        working_dir: str | None = None,
-        ignore_case: bool = False,
+            self,
+            text_before_cursor: str,
+            working_dir: str | None = None,
+            ignore_case: bool = False,
     ):
         text_expanded = os.path.expanduser(text_before_cursor)
         dir_part, file_part = os.path.split(text_expanded)
@@ -188,7 +187,7 @@ class CommandCompleter(Completer):
         return no_quotes, False
 
     # -------------------- Command completion -------------------- #
-    def _complete_command(self, text, no_sudo=False, built_in_index = 0):
+    def _complete_command(self, text, no_sudo=False, built_in_index=0):
         sudo = []
         built_in = []
         command = []
@@ -242,7 +241,8 @@ class CommandCompleter(Completer):
             out += self._complete_build_in_arg(text_before_cursor.removeprefix("sudo"))
             suggested = self.help_indexer.help_indexer.get_suggested(text_before_cursor)
             command_suggestions = suggested.get("subcommand_suggestions", [])
-            if text_before_cursor[-1] == " " or last_token.startswith("-") or last_token.startswith("--") or last_token.startswith("/"):
+            if text_before_cursor[-1] == " " or last_token.startswith("-") or last_token.startswith(
+                    "--") or last_token.startswith("/"):
                 optional_suggestions = suggested.get("option_suggestions", [])
             else:
                 optional_suggestions = suggested.get("optional_suggestions", [])
@@ -274,19 +274,21 @@ class CommandCompleter(Completer):
                 out.extend(paths)
 
         if COMPLETE_HISTORY:
-            out = self._complete_history(text_before_cursor, tool_index, token_index, last_token, self.input_handler.shell.working_dir) + out
+            out = self._complete_history(text_before_cursor, tool_index, token_index, last_token,
+                                         self.input_handler.shell.working_dir) + out
 
         return out
 
     def _complete_history(self, text_before_cursor, tool_index, token_index, last_token, working_dir):
         def _looks_like_path(token: str) -> bool:
             return (
-                "/" in token
-                or "\\" in token
-                or token.startswith(".")
-                or token.startswith("~")
-                or (len(token) >= 2 and token[1] == ":")  # Windows drive
+                    "/" in token
+                    or "\\" in token
+                    or token.startswith(".")
+                    or token.startswith("~")
+                    or (len(token) >= 2 and token[1] == ":")  # Windows drive
             )
+
         def _verify_path(token: str, working_dir: str | None) -> bool:
             expanded = os.path.expanduser(token)
 
@@ -300,6 +302,7 @@ class CommandCompleter(Completer):
             # parent exists (user still typing filename)
             parent = os.path.dirname(expanded)
             return bool(parent) and os.path.isdir(parent)
+
         out = []
         seen = set()
         history = reversed(self.input_handler.get_history())
@@ -326,7 +329,7 @@ class CommandCompleter(Completer):
                     if words[token_index - 2] != prev_typed_minus_one:
                         continue
 
-            candidate = words[token_index if text_before_cursor.endswith(" ") else token_index - 1 ]
+            candidate = words[token_index if text_before_cursor.endswith(" ") else token_index - 1]
 
             key = candidate.lower() if self.ignore_case else candidate
             if key in seen:
@@ -381,19 +384,8 @@ class CommandCompleter(Completer):
             start_whitespace = " " if text[0] == " " else ""
             end_whitespace = " " if text[-1] == " " else ""
 
-            # TODO: MAKE "sudo " autocomplete
-            if len(tokens) == tool_index + 1 and not text.endswith(" "):
-                try:
-                    first = tokens[tool_index]
-                except IndexError:
-                    first = tokens[0]
-
-                if COMPLETE_COMMAND:
-                    candidates.extend(self._complete_command(first, no_sudo=tool_offset))
-                if COMPLETE_PATHS:
-                    candidates.extend(
-                        self.complete_path(start_whitespace+first+end_whitespace, self.input_handler.shell.working_dir)
-                    )
+            if text == "sudo ":
+                candidates.extend(self._complete_command("", no_sudo=True))
                 for c in self._dedupe(candidates):
                     yield c
                 return
@@ -407,6 +399,15 @@ class CommandCompleter(Completer):
                     tool_index=tool_index,
                 )
             )
+
+            if len(tokens) == 1 and not text.endswith(" "):
+                candidates.extend(
+                    self._complete_command(tokens[0])
+                )
+                for c in self._dedupe(candidates):
+                    if not c.style == "class:arg":
+                        yield c
+                return
             for c in self._dedupe(candidates):
                 yield c
         except Exception as e:
@@ -424,13 +425,11 @@ class CommandCompleter(Completer):
                 function_name = last_frame.tb_frame.f_code.co_name
                 line_number = last_frame.tb_lineno
 
-
                 messages = [str(e), str(function_name), str(line_number), "PLEASE REPORT"]
                 yield from self._yield_autocomplete_errors(messages=messages)
                 return
 
             yield from self._yield_autocomplete_errors()
-
 
 
 # Lexer with live path highlighting
@@ -491,9 +490,10 @@ class ShellLexer(Lexer):
             quote_char = None
             word_index = 0
             words = segment.strip().split()
-            tool_index = 0 if words and words[0] != "sudo" else 1
+            seen_command = False
 
             def flush_word(word, i, quoted=False):
+                nonlocal seen_command
                 if not word:
                     return
 
@@ -514,9 +514,15 @@ class ShellLexer(Lexer):
                     )
 
                     if quoted:
-                        tokens.append(("class:quotes", word))  # <- key change
+                        tokens.append(("class:quotes", word))
                     elif word.lower() == "sudo" and i == 0:
                         tokens.append(("class:sudo", word))
+                    elif not seen_command:
+                        seen_command = True
+                        if word.strip() in self.shell.command_handler.get_commands():
+                            tokens.append(("class:built_in", word))
+                        else:
+                            tokens.append(("class:command", word))
                     elif word.startswith("$"):
                         tokens.append(("class:env_var", word))
                     elif path_exists or path_partial:
@@ -534,11 +540,6 @@ class ShellLexer(Lexer):
                         tokens.append(("class:digit", word))
                     elif word.startswith("-") or word.startswith("/"):
                         tokens.append(("class:optional", word))
-                    elif i == tool_index:
-                        if word in self.shell.command_handler.get_commands():
-                            tokens.append(("class:built_in", word))
-                        else:
-                            tokens.append(("class:command", word))
                     else:
                         tokens.append(("class:arg", word))
 
@@ -602,26 +603,26 @@ autocomplete_bg = "#1a1a1a"
 # Style for colors
 style_dict = {
     # commands & control
-    "command":        "bold #c98c6c",
-    "built_in":       "#69aa71",
-    "sudo":           "bold #db5d6b",
+    "command": "bold #c98c6c",
+    "built_in": "#69aa71",
+    "sudo": "bold #db5d6b",
 
     # arguments & values
-    "arg":            "#D4D4D4",
-    "digit":          "#2aacb8",
-    "optional":       "#737d84",
-    "quotes":         "italic #69aa71",
+    "arg": "#D4D4D4",
+    "digit": "#2aacb8",
+    "optional": "#737d84",
+    "quotes": "italic #69aa71",
 
     # filesystem
-    "path":           "#6f94dd",
-    "file":           "#EDEDED",
-    "path_complete":  "underline #6f94dd",
-    "file_complete":  "underline #EDEDED",
-    "link":           "#7b87b8",
+    "path": "#6f94dd",
+    "file": "#EDEDED",
+    "path_complete": "underline #6f94dd",
+    "file_complete": "underline #EDEDED",
+    "link": "#7b87b8",
 
     # environment & errors
-    "env_var":        "#5f826b",
-    "error":          "bold #db5d6b",
+    "env_var": "#5f826b",
+    "error": "bold #db5d6b",
 
     # Menu background
     "completion-menu": f"bg:{autocomplete_bg}",
@@ -631,6 +632,7 @@ style_dict = {
     "scrollbar.arrow": "bg:#444444",
 }
 style = Style.from_dict(style_dict)
+
 
 class ShellFileHistory(FileHistory):
     """
@@ -644,7 +646,7 @@ class ShellFileHistory(FileHistory):
         self.meta_filename = filename + ".meta"
         self.cmd_meta: dict[str, list[dict]] = defaultdict(list)
         self.rebuild_cmd_meta()
-        #print(self.cmd_meta)
+        # print(self.cmd_meta)
 
     def set_last_exit_code(self, value: int):
         """
@@ -691,7 +693,7 @@ class ShellFileHistory(FileHistory):
 
         try:
             with open(self.filename, "r", encoding="utf-8") as f_cmd, \
-                 open(self.meta_filename, "r", encoding="utf-8") as f_meta:
+                    open(self.meta_filename, "r", encoding="utf-8") as f_meta:
                 for line_cmd, line_meta in zip(f_cmd, f_meta):
                     cmd = line_cmd.rstrip("\n").lstrip("+")
                     try:
@@ -727,7 +729,7 @@ class ShellInput:
         self.indexer = CommandIndexer(index_path=AUTO_COMPLETE)
 
         # Use FileHistory for persistent history
-        #self.history = ShellFileHistory(shell, history_file)
+        # self.history = ShellFileHistory(shell, history_file)
         self.history = FileHistory(history_file)
 
         if AUTO_COMPLETE:
@@ -752,7 +754,7 @@ class ShellInput:
             history=self.history,
             complete_while_typing=True,
             complete_in_thread=True,
-            complete_style = CompleteStyle.MULTI_COLUMN,
+            complete_style=CompleteStyle.MULTI_COLUMN,
             key_bindings=kb
         )
         self.cmd_prefix = cmd_prefix
@@ -771,8 +773,8 @@ class ShellInput:
         return command
 
     def print_history(self):
-        for i, line  in enumerate(self.history.get_strings()):
-            print(f"{i+1}: {line}")
+        for i, line in enumerate(self.history.get_strings()):
+            print(f"{i + 1}: {line}")
 
     def get_history(self):
         return self.history.get_strings()
@@ -802,6 +804,6 @@ class ShellInput:
             history=self.history,
             complete_while_typing=True,
             complete_in_thread=True,
-            complete_style = CompleteStyle.MULTI_COLUMN,
+            complete_style=CompleteStyle.MULTI_COLUMN,
             key_bindings=kb
         )
