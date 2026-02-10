@@ -304,18 +304,17 @@ class ShellCommands:
             return
         command = args[0]
         args = args[1:]
-        match command:
-            case "output":
-                if len(args) != 1 or not args[0].isdigit():
-                    print("Usage: bg output <id>")
-                    return
-                self.shell.btm.show_output(int(args[0]))
-            case "kill":
-                if len(args) != 1 or not args[0].isdigit():
-                    print("Usage: kill <id>")
-                    return
-                self.shell.btm.kill(int(args[0]))
-            case "tasks":
-                self.shell.btm.task_table()
-            case _:
-                print("Usage: bg <command>")
+        if command == "output":
+            if len(args) != 1 or not args[0].isdigit():
+                print("Usage: bg output <id>")
+                return
+            self.shell.btm.show_output(int(args[0]))
+        elif command == "kill":
+            if len(args) != 1 or not args[0].isdigit():
+                print("Usage: kill <id>")
+                return
+            self.shell.btm.kill(int(args[0]))
+        elif command == "tasks":
+            self.shell.btm.task_table()
+        else:
+            print("Usage: bg <command>")
