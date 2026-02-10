@@ -184,7 +184,7 @@ class HelpIndexer:
             return None, None
 
         if spinner:
-            spinner.text = f"Mapping {" ".join(base_cmd)}..."
+            spinner.text = f"Mapping {' '.join(base_cmd)}..."
 
         dict = self._parse_help(collected_help)
         potential_commands = list(set(dict.get("potential_subcommands", [])))
@@ -288,7 +288,7 @@ class HelpIndexer:
     def _parse_subcommands(self, text: str) -> list:
         def flatten_set(text, indent="    "):
             # Extract the contents inside the braces
-            match = re.search(r'\{(.*)\}', text, re.DOTALL)
+            match = re.search(r'\{(.*)}', text, re.DOTALL)
             if not match:
                 return text  # no braces found, return original
 
