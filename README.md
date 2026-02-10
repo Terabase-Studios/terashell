@@ -2,7 +2,7 @@
 
 TeraShell is a modern, cross-platform command-line shell designed for developer productivity and a user-friendly experience. It combines a powerful interactive interface with advanced developer-focused tools to make working in the terminal faster and more intuitive.
 
-<!--  ![image](https://github.com/Terabase-Studios/TeraShell/assets/IMAGE_HERE) -->
+![image](https://github.com/Terabase-Studios/terashell/blob/main/assets/demo.png)
 
 ## Features
 
