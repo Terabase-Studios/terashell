@@ -13,7 +13,7 @@ def flatten_set(text, indent="    "):
         str: Flattened list with each argument on its own line.
     """
     # Extract the contents inside the braces
-    match = re.search(r'\{(.*)\}', text, re.DOTALL)
+    match = re.search(r'\{(.*)}', text, re.DOTALL)
     if not match:
         return text  # no braces found, return original
 

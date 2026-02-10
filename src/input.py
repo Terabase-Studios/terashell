@@ -133,7 +133,7 @@ class CommandCompleter(Completer):
     def complete_path_raw(
             self,
             text_before_cursor: str,
-            working_dir: str | None = None,
+            working_dir = None,
             ignore_case: bool = False,
     ):
         text_expanded = os.path.expanduser(text_before_cursor)
@@ -289,7 +289,7 @@ class CommandCompleter(Completer):
                     or (len(token) >= 2 and token[1] == ":")  # Windows drive
             )
 
-        def _verify_path(token: str, working_dir: str | None) -> bool:
+        def _verify_path(token: str, working_dir) -> bool:
             expanded = os.path.expanduser(token)
 
             if not os.path.isabs(expanded) and working_dir:
