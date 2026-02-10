@@ -2,14 +2,14 @@
 
 TeraShell is a modern, cross-platform command-line shell designed for developer productivity and a user-friendly experience. It combines a powerful interactive interface with advanced developer-focused tools to make working in the terminal faster and more intuitive.
 
-![image](https://github.com/Terabase-Studios/TeraShell/assets/1925364/11d882a2-3023-424a-939e-4e4b785d9962)
+<!--  ![image](https://github.com/Terabase-Studios/TeraShell/assets/IMAGE_HERE) -->
 
 ## Features
 
 *   **Intelligent Autocompletion**: TeraShell provides rich, context-aware suggestions for commands, arguments, flags, paths, and history.
 *   **Live Syntax Highlighting**: Commands, arguments, and paths are colored and highlighted as you type, improving readability and reducing errors.
-*   **Command Mapping**: A powerful `map` command that learns the CLI of other tools by parsing their help text, providing deep autocompletion for their subcommands and flags.
-*   **Advanced Background Tasks**: Run processes in the background with `&` and manage them with the `bg` command. View a detailed table of running jobs with CPU/memory stats, see their output, and kill them.
+*   **Command Mapping**: A powerful `map` command that learns the CLI of other tools by parsing their help text, for autocomplete as long as the help changes for each subcommand.
+*   **Advanced Background Tasks**: Run processes in the background with `&` and manage them with the `bg` command. View a detailed table of running jobs with CPU/memory stats and see their output.
 *   **Python Virtual Environment Support**: First-class support for `activate` and `deactivate` commands, with the active venv displayed in the prompt.
 *   **Instruction Manager**: A built-in `instr` command to create, manage, and save sequences of commands, acting as a simple macro system.
 *   **Cross-Platform**: Designed to run on both Windows and Unix-like systems (Linux, macOS).
@@ -17,7 +17,7 @@ TeraShell is a modern, cross-platform command-line shell designed for developer 
 
 ## Installation
 
-TeraShell now features a safer, more user-friendly installer that defaults to a local, user-specific installation, which does not require administrator or `sudo` privileges.
+TeraShell features a safer, more user-friendly installer that defaults to a local, user-specific installation, which does not require administrator or `sudo` privileges.
 
 ### Linux & macOS
 
@@ -40,7 +40,7 @@ TeraShell now features a safer, more user-friendly installer that defaults to a 
     ```
     This script will offer two choices:
     *   **Safe Activation (Recommended):** Adds `exec terashell` to your `.bashrc` or `.zshrc`. This is easily reversible.
-    *   **Login Shell Activation (Risky):** Uses `chsh` to change your default login shell. **This can lock you out of your system if TeraShell fails.**
+    *   **Login Shell Activation:** Uses `chsh` to change your default login shell. **This can lock you out of your system if TeraShell fails.**
 
 ### Windows
 
@@ -88,7 +88,7 @@ Once inside TeraShell, you can use standard shell commands as well as the advanc
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a pull request or open an issue for any bugs or feature requests.
-
+<!--
 ## License
 
 This project is licensed under the terms of the [LICENSE](LICENSE) file.
