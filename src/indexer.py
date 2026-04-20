@@ -52,10 +52,13 @@ class CommandIndexer:
                     if not os.path.isdir(path):
                         continue
                     spinner.text = f"Indexing path...   {path}"
-                    for f in os.listdir(path):
-                        full_path = os.path.join(path, f)
-                        if os.path.isfile(full_path) and os.access(full_path, os.X_OK):
-                            commands.add(f)
+                    try:
+                        for f in os.listdir(path):
+                            full_path = os.path.join(path, f)
+                            if os.path.isfile(full_path) and os.access(full_path, os.X_OK):
+                                commands.add(f)
+                    except Exception:
+                        pass
                 commands.update(self.BUILTINS["unix"])
 
             return sorted(commands)
