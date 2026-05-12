@@ -1,6 +1,6 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from pathlib import Path
-from config import INSTR_FILE
+from src import INSTR_FILE
 
 def test_instr_add_calls_add(shell_commands):
     """Test that 'instr add <text>' command calls instr_helper.add with correct text."""

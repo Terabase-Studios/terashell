@@ -8,10 +8,9 @@ import sys
 
 from prompt_toolkit.formatted_text import ANSI
 
-from background import create_btm
 from commands import ShellCommands
-from config import HISTORY_FILE, INSTANCE_FILE
-from config import SHELL_NAME, SHOW_USER, IS_UNIX, VERSION
+from commands.background import create_btm
+from config import VERSION, HISTORY_FILE, IS_UNIX, SHELL_NAME, SHOW_USER, INSTANCE_FILE
 from input import ShellInput
 
 try:

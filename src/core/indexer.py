@@ -10,7 +10,7 @@ from pathlib import Path
 
 from yaspin import yaspin
 
-from config import HELP_FILE, HELP_FLAGS, PATH_INDEXING, ONE_FLAG_PER_GROUP, IS_UNIX, PATH_INDEXING_EXCLUDE
+from config import PATH_INDEXING, PATH_INDEXING_EXCLUDE, HELP_FILE, IS_UNIX, HELP_FLAGS, ONE_FLAG_PER_GROUP
 
 
 class CommandIndexer:

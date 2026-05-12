@@ -1,14 +1,13 @@
 import sys
 import os
 import pytest
-from unittest import mock
 import threading
-import time # Added for sleep in debug
 
 # We need to import the main function from TeraShell to test it.
 # This relies on the pytest.ini configuration `pythonpath = src`.
 from TeraShell import main
-import config
+from src import config
+
 
 def run_with_timeout(func, timeout=5):
     """Run func in a thread, fail if it doesn't finish within timeout seconds."""

@@ -18,7 +18,7 @@ failed_to_start = False
 
 def start_shell(shell_script):
     global times_critical
-    from config import SHELL_NAME, IS_UNIX, IS_WINDOWS
+    from src import SHELL_NAME, IS_UNIX, IS_WINDOWS
     # Handle instance safely if possible
     try:
         instance = shell_script.handle_instance()
@@ -62,11 +62,11 @@ def start_shell(shell_script):
 def import_shell_script():
     # Try to import the main shell script
     try:
-        import shell
+        from core import shell
         return shell
     except Exception as ex:
         try:
-            import config
+            from src import config
             shell_name = config.SHELL_NAME
         except:
             shell_name = "TeraShell"

@@ -5,9 +5,9 @@ import traceback
 
 from yaspin import yaspin
 
-from config import SHELL_NAME, MAP_WARN_DISABLED_FILE, HELP_FLAGS, IS_WINDOWS, INSTANCE_FILE, INSTR_FILE, \
-    INDIVIDUAL_INSTR_FOR_EACH_INSTANCE
-from instructions import InstructionHelper
+from commands.instructions import InstructionHelper
+from config import SHELL_NAME, MAP_WARN_DISABLED_FILE, HELP_FLAGS, IS_WINDOWS, INSTANCE_FILE, \
+    INDIVIDUAL_INSTR_FOR_EACH_INSTANCE, INSTR_FILE
 
 RED = "\033[91m"
 BOLD = "\033[1m"
@@ -249,7 +249,7 @@ class ShellCommands:
             return
         sub = args[0]
         if not hasattr(self, "instr_helper"):
-            from shell import instance_file
+            from core.shell import instance_file
             file = instance_file(self.shell.instance, INSTR_FILE) if INDIVIDUAL_INSTR_FOR_EACH_INSTANCE else INSTR_FILE
             self.instr_helper = InstructionHelper(file)
 
