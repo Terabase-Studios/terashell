@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal enabledelayedexpansion
 
 REM -------------------------
 REM Define installation paths
@@ -32,6 +32,11 @@ if exist "%USER_TARGET%" (
 ) else (
     echo [*] No TeraShell installation found for current user.
 )
+
+echo [*] Removing current user PATH entry...
+set "PATH_SCOPE=User"
+set "REMOVE_TARGET=%USER_TARGET%"
+call :RemovePathEntry
 
 
 REM -----------------------------------------------------
@@ -81,6 +86,11 @@ if exist "%ALL_USERS_SHORTCUT%" (
     echo [*] Shortcut removed
 )
 
+echo [*] Removing all users PATH entry...
+set "PATH_SCOPE=Machine"
+set "REMOVE_TARGET=%ALL_USERS_TARGET%"
+call :RemovePathEntry
+
 goto finish
 
 :finish
@@ -88,3 +98,8 @@ echo.
 echo [*] TeraShell uninstall finished
 pause
 exit /b
+
+:RemovePathEntry
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$target=$env:REMOVE_TARGET; $scope=$env:PATH_SCOPE; $path=[Environment]::GetEnvironmentVariable('Path',$scope); if ([string]::IsNullOrWhiteSpace($path)) { exit 0 }; $parts=$path -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }; $filtered=$parts | Where-Object { $_.TrimEnd('\') -ine $target.TrimEnd('\') }; if ($filtered.Count -ne $parts.Count) { [Environment]::SetEnvironmentVariable('Path', ($filtered -join ';'), $scope) }"
+if errorlevel 1 echo [!] Failed to remove PATH entry for %REMOVE_TARGET%.
+exit /b 0

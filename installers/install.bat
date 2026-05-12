@@ -9,7 +9,7 @@ set "ALL_USERS_TARGET=%ProgramFiles%\TeraShell"
 set "PY_SRC_DIR=%~dp0\.."
 set "REQUIREMENTS=%PY_SRC_DIR%\requirements.txt"
 set "PYTHON_MAJOR_REQ=3"
-set "PYTHON_MINOR_REQ=6"
+set "PYTHON_MINOR_REQ=11"
 
 REM -------------------------
 REM Ask installation scope
@@ -89,17 +89,32 @@ REM -------------------------
 echo [*] Copying TeraShell files to %TARGET_DIR%...
 if not exist "%TARGET_DIR%" mkdir "%TARGET_DIR%"
 xcopy /E /I /Y "%PY_SRC_DIR%\src\*" "%TARGET_DIR%\" >nul
+if errorlevel 1 (
+    echo [!] Failed to copy TeraShell files.
+    pause
+    exit /b 1
+)
 
 REM -------------------------
 REM Create virtual environment
 REM -------------------------
 echo [*] Creating virtual environment...
 python -m venv "%TARGET_DIR%\venv"
+if errorlevel 1 (
+    echo [!] Failed to create virtual environment.
+    pause
+    exit /b 1
+)
 
 REM Install requirements
 if exist "%REQUIREMENTS%" (
     echo [*] Installing dependencies...
     "%TARGET_DIR%\venv\Scripts\pip.exe" install -r "%REQUIREMENTS%"
+    if errorlevel 1 (
+        echo [!] Failed to install dependencies.
+        pause
+        exit /b 1
+    )
 )
 
 REM -------------------------
@@ -142,26 +157,21 @@ REM -------------------------
 if /i "%ADD_PATH%"=="y" (
     echo [*] Updating PATH...
 
-    REM Read the current PATH depending on scope
     if "%scope_choice%"=="1" (
-        for /f "tokens=2*" %%A in ('reg query HKCU\Environment /v PATH 2^>nul') do set "CUR_PATH=%%B"
+        set "PATH_SCOPE=User"
     ) else (
-        for /f "tokens=2*" %%A in ('reg query HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment /v PATH 2^>nul') do set "CUR_PATH=%%B"
+        set "PATH_SCOPE=Machine"
     )
 
-    if not defined CUR_PATH set "CUR_PATH="
-
-    REM Check for existing entry (case-insensitive)
-    echo %CUR_PATH% | findstr /I /C:"%TARGET_DIR%" >nul
-    if %errorlevel%==0 (
-        echo [*] PATH already contains TeraShell =)
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$target=$env:TARGET_DIR; $scope=$env:PATH_SCOPE; $path=[Environment]::GetEnvironmentVariable('Path',$scope); $parts=@(); if (-not [string]::IsNullOrWhiteSpace($path)) { $parts=$path -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } }; $exists=$parts | Where-Object { $_.TrimEnd('\') -ieq $target.TrimEnd('\') }; if ($exists) { exit 10 }; [Environment]::SetEnvironmentVariable('Path', (($parts + $target) -join ';'), $scope)"
+    if !errorlevel! EQU 10 (
+        echo [*] PATH already contains TeraShell.
+    ) else if errorlevel 1 (
+        echo [!] Failed to update PATH.
+        pause
+        exit /b 1
     ) else (
-        echo [*] Adding TeraShell to PATH...
-        if "%scope_choice%"=="1" (
-            setx PATH "%CUR_PATH%;%TARGET_DIR%" >nul
-        ) else (
-            setx /M PATH "%CUR_PATH%;%TARGET_DIR%" >nul
-        )
+        echo [*] Added TeraShell to PATH.
     )
 )
 
