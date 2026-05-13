@@ -1,15 +1,13 @@
 import sys
-import os
-from pathlib import Path
 from unittest.mock import Mock, patch
 import pytest
+
+from commands import ShellCommands
+from commands.background import BackgroundTaskManager
 
 # Add src to path to allow imports
 sys.path.insert(0, './src')
 
-from commands import ShellCommands
-from input import ShellInput
-from background import BackgroundTaskManager
 
 @pytest.fixture
 def shell_commands(tmp_path):

@@ -39,6 +39,12 @@ HELP_FLAGS = ["-h", "--help", "/?", "help"]  # common help flags
 # Command Linking Symbols
 COMMAND_LINKING_SYMBOLS = ["&&", "||", "|", ">", ">>", "<", "2>", "&>"]
 
+# AI
+AI_ENABLED = False
+AI_SERVER_IP = "http://127.0.0.1:11434"
+AI_API_KEY = ""
+AI_MODEL = "small:latest"
+
 # Other
 SHOW_USER = True
 INDIVIDUAL_INSTR_FOR_EACH_INSTANCE = True

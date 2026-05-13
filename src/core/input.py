@@ -10,9 +10,9 @@ from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.shortcuts import CompleteStyle
 from prompt_toolkit.styles import Style
 
-from config import AUTO_COMPLETE, HISTORY_FILE, PROMPT_HIGHLIGHTING, COMPLETE_PATHS, COMPLETE_ARGS, COMPLETE_HISTORY, \
-    COMMAND_LINKING_SYMBOLS, IGNORE_SPACE
-from indexer import CommandIndexer
+from config import COMPLETE_ARGS, COMPLETE_PATHS, COMPLETE_HISTORY, COMMAND_LINKING_SYMBOLS, IGNORE_SPACE, \
+    AUTO_COMPLETE, HISTORY_FILE, PROMPT_HIGHLIGHTING
+from .indexer import CommandIndexer
 
 kb = KeyBindings()
 

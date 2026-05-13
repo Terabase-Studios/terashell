@@ -5,9 +5,9 @@ import traceback
 
 from yaspin import yaspin
 
-from config import SHELL_NAME, MAP_WARN_DISABLED_FILE, HELP_FLAGS, IS_WINDOWS, INSTANCE_FILE, INSTR_FILE, \
-    INDIVIDUAL_INSTR_FOR_EACH_INSTANCE
-from instructions import InstructionHelper
+from commands.instructions import InstructionHelper
+from config import SHELL_NAME, MAP_WARN_DISABLED_FILE, HELP_FLAGS, IS_WINDOWS, INSTANCE_FILE, \
+    INDIVIDUAL_INSTR_FOR_EACH_INSTANCE, INSTR_FILE
 
 RED = "\033[91m"
 BOLD = "\033[1m"
@@ -24,6 +24,7 @@ class ShellCommands:
             "exit": self._cmd_exit,
             "cd": self._cmd_cd,
             "map": self._cmd_map,
+            "ai": self._cmd_ai,
             "history": self._cmd_history,
             "history clear": self._cmd_history,
             "activate": self._cmd_activate,
@@ -49,6 +50,7 @@ class ShellCommands:
             "f": f"Fall back to another shell on Unix. Restart on Windows",
             "exit": f"Exit the current {SHELL_NAME} instance.",
             "map": f"Run a tool and its commands recursively and add/update autocompletion.",
+            "ai": "Connect to the configured AI service and enable AI tools.",
             "history": "Managed stored inputs.",
             "activate": "Usage: \"activate <venv>\" Activate a Python virtual environment.",
             "deactivate": "Deactivate the current virtual environment.",
@@ -63,8 +65,9 @@ class ShellCommands:
             "f": f"Fall back to another shell on Unix. Restart on Windows",
             "exit": f"Exit the current {SHELL_NAME} instance.",
             "map": f"Run a tool and its commands recursively and add/update autocompletion.",
+            "ai": "Connect to the configured AI service and enable AI tools.",
             "history": "See all previous inputs.",
-            "history Clear": "Clear input history.",
+            "history clear": "Clear input history.",
             "activate": "Usage: \"activate <venv>\" Activate a Python virtual environment.",
             "deactivate": "Deactivate the current virtual environment.",
             #    "nest": "Usage: \"nest <shell>\" Open a shell sub-instance with different saved data",
@@ -118,9 +121,9 @@ class ShellCommands:
         for cmd, desc in help.items():
             print(f"\t{cmd.ljust(width)} : {desc}")
         print()
-        header = f" Modified commands:"
-        print(header, "\n", "-" * len(header))
-        print(" ", ", ".join([i for i in self.get_commands() if i not in list(help.keys())]))
+        #header = f" Modified commands:"
+        #print(header, "\n", "-" * len(header))
+        #print(" ", ", ".join([i for i in self.get_commands() if i not in list(help.keys())]))
 
     def _cmd_exit(self, args):
         self.shell.running = False
@@ -161,6 +164,10 @@ class ShellCommands:
         # execute the original behavior
         with yaspin(text=f"Mapping: {args[0]}...", color="green", ) as spinner:
             self.shell.input_handler.indexer.help_indexer.map_tool(args[0], spinner=spinner)
+
+    def _cmd_ai(self, args):
+        import ai
+        ai.init()
 
     def _cmd_history(self, args):
         if not args:
@@ -249,7 +256,7 @@ class ShellCommands:
             return
         sub = args[0]
         if not hasattr(self, "instr_helper"):
-            from shell import instance_file
+            from core.shell import instance_file
             file = instance_file(self.shell.instance, INSTR_FILE) if INDIVIDUAL_INSTR_FOR_EACH_INSTANCE else INSTR_FILE
             self.instr_helper = InstructionHelper(file)
 

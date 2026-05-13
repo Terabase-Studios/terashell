@@ -1,13 +1,15 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from pathlib import Path
+
 from config import INSTR_FILE
+
 
 def test_instr_add_calls_add(shell_commands):
     """Test that 'instr add <text>' command calls instr_helper.add with correct text."""
     commands, shell, _ = shell_commands
     
     with patch('commands.InstructionHelper') as MockInstructionHelper, \
-         patch('shell.instance_file', return_value="/tmp/test_instr_file.json") as mock_instance_file:
+         patch('core.shell.instance_file', return_value="/tmp/test_instr_file.json") as mock_instance_file:
         
         commands.handle_command("instr add some instruction text")
         
@@ -20,8 +22,8 @@ def test_instr_remove_calls_remove(shell_commands):
     commands, shell, _ = shell_commands
     
     with patch('commands.InstructionHelper') as MockInstructionHelper, \
-         patch('shell.instance_file', return_value="/tmp/test_instr_file.json") as mock_instance_file:
-        
+         patch('core.shell.instance_file', return_value="/tmp/test_instr_file.json") as mock_instance_file:
+
         commands.handle_command("instr remove")
         
         mock_instance_file.assert_called_once_with(shell.instance, INSTR_FILE)
@@ -33,7 +35,7 @@ def test_instr_list_calls_list_and_prints(shell_commands, capsys):
     commands, shell, _ = shell_commands
     
     with patch('commands.InstructionHelper') as MockInstructionHelper, \
-         patch('shell.instance_file', return_value="/tmp/test_instr_file.json") as mock_instance_file:
+         patch('core.shell.instance_file', return_value="/tmp/test_instr_file.json") as mock_instance_file:
         
         MockInstructionHelper.return_value.list.return_value = "1. test instruction"
         
@@ -50,7 +52,7 @@ def test_instr_save_calls_save_markdown(shell_commands):
     commands, shell, _ = shell_commands
     
     with patch('commands.InstructionHelper') as MockInstructionHelper, \
-         patch('shell.instance_file', return_value="/tmp/test_instr_file.json") as mock_instance_file:
+         patch('core.shell.instance_file', return_value="/tmp/test_instr_file.json") as mock_instance_file:
         
         filename = "test_instructions.md"
         shell.working_dir = "/tmp" # Set a mock working directory
@@ -67,7 +69,7 @@ def test_instr_clear_calls_clear(shell_commands):
     commands, shell, _ = shell_commands
     
     with patch('commands.InstructionHelper') as MockInstructionHelper, \
-         patch('shell.instance_file', return_value="/tmp/test_instr_file.json") as mock_instance_file:
+         patch('core.shell.instance_file', return_value="/tmp/test_instr_file.json") as mock_instance_file:
         
         commands.handle_command("instr clear")
         

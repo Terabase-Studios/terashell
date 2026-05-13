@@ -62,11 +62,11 @@ def start_shell(shell_script):
 def import_shell_script():
     # Try to import the main shell script
     try:
-        import shell
+        from core import shell
         return shell
     except Exception as ex:
         try:
-            import config
+            from src import config
             shell_name = config.SHELL_NAME
         except:
             shell_name = "TeraShell"
