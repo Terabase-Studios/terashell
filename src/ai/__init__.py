@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any, Generator
+from typing import Optional, List, Dict, Any
 
 from openai import OpenAI
 from yaspin import yaspin
@@ -282,11 +282,10 @@ def init() -> None:
     from config import AI_SERVER_IP
     from config import AI_API_KEY
     from config import AI_MODEL
-    from config import SHELL_NAME
 
     config.AI_ENABLED = True
     try:
-        with yaspin(text="Connecting to AI service", color="yellow") as spinner:
+        with yaspin(text=f"Connecting to {AI_SERVER_IP}...", color="yellow") as spinner:
             AI_INTERFACE = AIInterface(AI_SERVER_IP, AI_API_KEY)
             AI_INTERFACE.select_model(AI_MODEL, preload=False)
     except KeyboardInterrupt:
