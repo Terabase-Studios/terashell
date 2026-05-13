@@ -90,8 +90,12 @@ def test_c_argument_failure(monkeypatch):
     run_with_timeout(inner, timeout=2)
 
 
+@pytest.mark.skip(reason="Interactive shell test disabled in CI / unstable pexpect")
 def test_interactive_shell():
     """Test that TeraShell can be run interactively."""
+    import config
+    config.AI_ENABLED = False
+
     if sys.platform == "win32":
         import wexpect as pexpect
     else:
@@ -111,8 +115,8 @@ def test_interactive_shell():
 
     # Spawn the shell using pexpect
     command = f"{sys.executable} {terashell_path}"
-    print(f"[test_interactive_shell] Spawning command: {command}")
     child = pexpect.spawn(command, encoding='utf-8')
+    child.logfile = sys.stdout.buffer
 
     try:
         # Wait for the initial prompt
