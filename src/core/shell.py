@@ -11,7 +11,7 @@ from prompt_toolkit.formatted_text import ANSI
 from commands import ShellCommands
 from commands.background import create_btm
 from config import VERSION, HISTORY_FILE, IS_UNIX, SHELL_NAME, SHOW_USER, INSTANCE_FILE
-from input import ShellInput
+from .input import ShellInput
 
 try:
     import colorama

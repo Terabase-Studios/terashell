@@ -18,7 +18,7 @@ failed_to_start = False
 
 def start_shell(shell_script):
     global times_critical
-    from src import SHELL_NAME, IS_UNIX, IS_WINDOWS
+    from config import SHELL_NAME, IS_UNIX, IS_WINDOWS
     # Handle instance safely if possible
     try:
         instance = shell_script.handle_instance()

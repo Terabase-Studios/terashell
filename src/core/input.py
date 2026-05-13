@@ -12,7 +12,7 @@ from prompt_toolkit.styles import Style
 
 from config import COMPLETE_ARGS, COMPLETE_PATHS, COMPLETE_HISTORY, COMMAND_LINKING_SYMBOLS, IGNORE_SPACE, \
     AUTO_COMPLETE, HISTORY_FILE, PROMPT_HIGHLIGHTING
-from indexer import CommandIndexer
+from .indexer import CommandIndexer
 
 kb = KeyBindings()
 
