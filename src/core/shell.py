@@ -7,11 +7,15 @@ import subprocess
 import sys
 
 from prompt_toolkit.formatted_text import ANSI
+from yaspin import yaspin
 
+import config
 from commands import ShellCommands
 from commands.background import create_btm
-from config import VERSION, HISTORY_FILE, IS_UNIX, SHELL_NAME, SHOW_USER, INSTANCE_FILE
+from config import VERSION, HISTORY_FILE, IS_UNIX, SHELL_NAME, SHOW_USER, INSTANCE_FILE, AI_ENABLED, AI_SERVER_IP, \
+    AI_API_KEY, AI_MODEL
 from .input import ShellInput
+import ai
 
 try:
     import colorama
@@ -69,6 +73,12 @@ class TeraShell:
 
         if "VIRTUAL_ENV" in os.environ:
             self.command_handler._cmd_activate([os.environ.get("VIRTUAL_ENV")])
+
+
+        # Initialize AI
+        if AI_ENABLED:
+            ai.init()
+
 
     def run(self, command: str):
         try:
