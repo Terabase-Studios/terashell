@@ -3,7 +3,7 @@ import sys
 from os import makedirs
 
 SHELL_NAME = "TeraShell"
-VERSION = "0.4.1"
+VERSION = "0.5.1-alpha2"
 
 # Cache files
 APP_DIR = os.path.expanduser(f"~/.{SHELL_NAME}")
