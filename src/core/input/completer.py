@@ -93,8 +93,8 @@ class CommandCompleter(Completer):
             )
         return out
 
+    @staticmethod
     def _complete_path_raw(
-            self,
             text_before_cursor: str,
             working_dir = None,
             ignore_case: bool = False,
@@ -317,11 +317,92 @@ class CommandCompleter(Completer):
 
         return out
 
+    @staticmethod
+    def ellipsize_left(text: str, max_len: int) -> str:
+        if len(text) <= max_len:
+            return ""
+        return ": ..." + text[-(max_len - 3):]
+
+    # -------------------- AI -------------------- #
+    @staticmethod
+    def ai_limit_history(history, max_items=25):
+        seen = set()
+        out = []
+
+        for item in history[::-1]:  # newest first
+            if item in seen:
+                continue
+            seen.add(item)
+            out.append(item)
+
+            if len(out) >= max_items:
+                break
+
+        return out[::-1]
+
+
+    @staticmethod
+    def ai_get_nearby_files(cwd: str, prefix: str, limit: int = 30):
+        try:
+            items = os.listdir(cwd)
+        except Exception:
+            return []
+
+        token = (prefix.split(" ")[-1] if prefix else "").lower()
+
+        if token:
+            filtered = [i for i in items if i.lower().startswith(token)]
+        else:
+            filtered = items
+
+        return filtered[:limit]
+
+
+    def complete_ai(self, text):
+        out = []
+        if config.AI_ENABLED and ai.AI_INTERFACE:
+            current_os = config.PLATFORM
+            cwd = self.input_handler.shell.working_dir
+            nearby_files = self.ai_get_nearby_files(cwd, prefix=text)
+            history = self.ai_limit_history(self.input_handler.get_history())
+            history_text = ", ".join(history)
+            nearby_files_text = ", ".join(nearby_files)
+            ai_completions = ai.AI_INTERFACE.autocomplete(
+                text,
+                os=current_os,
+                cwd=cwd,
+                nearby_files=nearby_files_text,
+                history_text=history_text,
+            )
+
+            for completion in ai_completions:
+                if not completion:
+                    continue
+
+                completion = completion.strip()
+
+                insert_text = completion
+
+                display = self.ellipsize_left(insert_text, 50)
+
+
+                out.append(
+                    Completion(
+                        insert_text,
+                        start_position=-len(text),
+                        style="class:completion-ai",
+                        display_meta=f"AI{display}",
+                    )
+                )
+        return out
+
+
     # -------------------- Utility -------------------- #
     def _matches_token(self, candidate, token):
         return candidate.lower().startswith(token.lower()) if self.ignore_case else candidate.startswith(token)
 
-    def _yield_autocomplete_errors(self, messages=None):
+    @staticmethod
+    def _yield_autocomplete_errors(messages=None):
         if messages is None:
             messages = ["NULL", "NULL", "NULL"]
         for message in messages:
@@ -367,30 +448,6 @@ class CommandCompleter(Completer):
                 )
             )
 
-
-            # AI:
-            if config.AI_ENABLED and ai.AI_INTERFACE:
-                ai_completions = ai.AI_INTERFACE.autocomplete(text)
-
-                for completion in ai_completions:
-                    if not completion:
-                        continue
-
-                    completion = completion.strip()
-
-                    insert_text = completion
-
-                    candidates.append(
-                        Completion(
-                            insert_text,
-                            start_position=-len(text),
-                            style="class:completion-ai",
-                            display_meta="AI",
-
-                        )
-                    )
-
-
             if len(tokens) == 1 and not text.endswith(" "):
                 candidates.extend(
                     self._complete_command(tokens[0])
@@ -398,9 +455,12 @@ class CommandCompleter(Completer):
                 for c in self._dedupe(candidates):
                     if not c.style == "class:arg":
                         yield c
-                return
-            for c in self._dedupe(candidates):
-                yield c
+            else:
+                for c in self._dedupe(candidates):
+                    yield c
+
+            for completion in self.complete_ai(text):
+                yield completion
         except Exception as e:
             # Get the traceback object from the exception
             tb = e.__traceback__

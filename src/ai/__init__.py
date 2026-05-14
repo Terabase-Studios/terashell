@@ -183,6 +183,7 @@ class AIInterface:
         self,
         prefix: str,
         config: Optional[AutocompleteConfig] = None,
+        os="UNKNOWN", cwd="UNKNOWN", nearby_files="UNKNOWN", history_text: str="UNKNOWN",
     ) -> List[str]:
 
         if not self.current_model:
@@ -191,6 +192,15 @@ class AIInterface:
         config = config or AutocompleteConfig()
 
         prefix = prefix.rstrip()
+
+        context = (
+            f"OS: {os}\n"
+            f"Shell: TeraShell\n"
+            f"Current Directory: {cwd}\n\n"
+            f"Nearby Files:\n{nearby_files}\n\n"
+            f"Recent Commands:\n{history_text}\n\n"
+            f"Current Input:\n{prefix}"
+        )
 
         response = self.client.chat.completions.create(
             model=self.current_model,
@@ -209,7 +219,7 @@ class AIInterface:
                 },
                 {
                     "role": "user",
-                    "content": prefix
+                    "content": context
                 }
             ],
             temperature=0.0,

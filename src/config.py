@@ -50,7 +50,8 @@ SHOW_USER = True
 INDIVIDUAL_INSTR_FOR_EACH_INSTANCE = True
 
 # Get os
-IS_WINDOWS = sys.platform.startswith("win")
-IS_LINUX = sys.platform.startswith("linux")
-IS_MAC = sys.platform.startswith("darwin")
+PLATFORM = sys.platform
+IS_WINDOWS = PLATFORM.startswith("win")
+IS_LINUX = PLATFORM.startswith("linux")
+IS_MAC = PLATFORM.startswith("darwin")
 IS_UNIX = IS_LINUX or IS_MAC
