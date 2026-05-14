@@ -85,6 +85,8 @@ def fake_fs(tmp_path):
 class FakeDocument:
     def __init__(self, text):
         self.text = text
+        self.lines = text.splitlines()
+
 
 class FakeShell:
     class FakeCommandHandler:

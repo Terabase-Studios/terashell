@@ -17,37 +17,22 @@ class ShellLexer(Lexer):
             parts = []
             buf = ""
             i = 0
-            in_quotes = False
-            quote_char = None
 
             while i < len(line):
-                ch = line[i]
+                matched = False
 
-                if ch in ("'", '"'):
-                    if not in_quotes:
-                        in_quotes = True
-                        quote_char = ch
-                    elif ch == quote_char:
-                        in_quotes = False
-                        quote_char = None
-                    buf += ch
-                    i += 1
-                    continue
+                for sym in COMMAND_LINKING_SYMBOLS:
+                    if line.startswith(sym, i):
+                        if buf:
+                            parts.append(("segment", buf))
+                        parts.append(("link", sym))
+                        buf = ""
+                        i += len(sym)
+                        matched = True
+                        break
 
-                if not in_quotes:
-                    for sym in COMMAND_LINKING_SYMBOLS:
-                        if line.startswith(sym, i):
-                            if buf:
-                                parts.append(("segment", buf))
-                            parts.append(("link", sym))
-                            buf = ""
-                            i += len(sym)
-                            break
-                    else:
-                        buf += ch
-                        i += 1
-                else:
-                    buf += ch
+                if not matched:
+                    buf += line[i]
                     i += 1
 
             if buf:
@@ -61,10 +46,9 @@ class ShellLexer(Lexer):
             in_quotes = False
             quote_char = None
             word_index = 0
-            words = segment.strip().split()
             seen_command = False
 
-            def flush_word(word, i, quoted=False):
+            def flush_word(word, quoted=False):
                 nonlocal seen_command
                 if not word:
                     return
@@ -87,7 +71,7 @@ class ShellLexer(Lexer):
 
                     if quoted:
                         tokens.append(("class:quotes", word))
-                    elif word.lower() == "sudo" and i == 0:
+                    elif word.lower() == "sudo" and not seen_command:
                         tokens.append(("class:sudo", word))
                     elif not seen_command:
                         seen_command = True
@@ -130,7 +114,7 @@ class ShellLexer(Lexer):
                     elif ch == quote_char:
                         in_quotes = False
                         current += ch
-                        flush_word(current, word_index, quoted=True)
+                        flush_word(current, quoted=True)
                         current = ""
                         word_index += 1
                         quote_char = None
@@ -138,7 +122,7 @@ class ShellLexer(Lexer):
                     continue
 
                 if ch == " " and not in_quotes:
-                    flush_word(current, word_index)
+                    flush_word(current)
                     if current:
                         word_index += 1
                     current = ""
@@ -151,14 +135,15 @@ class ShellLexer(Lexer):
 
             # flush anything left (in case segment ends without space)
             if current:
-                flush_word(current, word_index, quoted=in_quotes)
+                flush_word(current, quoted=in_quotes)
 
             return tokens
 
-        def get_line(_lineno):
+        def get_line(lineno):
+            line = document.lines[lineno]
             tokens = []
 
-            for kind, value in split_by_linkers(text):
+            for kind, value in split_by_linkers(line):
                 if kind == "link":
                     tokens.append(("class:link", value.strip()))
                 else:
