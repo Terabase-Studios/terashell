@@ -2,7 +2,7 @@ import os
 import re
 import pytest
 from collections import Counter
-from core.input import ShellLexer, style
+from core.input.__init__ import ShellLexer, style
 
 # ---------- Prepare formating ----------
 # Map basic colors to ANSI codes

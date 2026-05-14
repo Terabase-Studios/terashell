@@ -12,7 +12,7 @@ import ai
 from commands import ShellCommands
 from commands.background import create_btm
 from config import VERSION, HISTORY_FILE, IS_UNIX, SHELL_NAME, SHOW_USER, INSTANCE_FILE, AI_ENABLED
-from .input import ShellInput
+from core.input.__init__ import ShellInput
 
 try:
     import colorama
