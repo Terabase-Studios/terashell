@@ -177,3 +177,23 @@ def test_shell_lexing(shell, capsys):
     # Assert no missing or duplicate tokens
     assert not missing, f"Lexer did not produce tokens: {missing}"
     assert not duplicates, f"Lexer produced duplicate tokens: {duplicates}"
+
+
+def test_quoted_linkers_are_not_split(shell):
+    lexer = ShellLexer(shell)
+    document = FakeDocument('builtin "a | b && c > d" && tool')
+
+    tokens = [(cls, val) for cls, val in lexer.lex_document(document)(0) if cls]
+
+    assert ("class:quotes", '"a | b && c > d"') in tokens
+    assert tokens.count(("class:link", "&&")) == 1
+
+
+def test_multichar_linkers_are_matched_first(shell):
+    lexer = ShellLexer(shell)
+    document = FakeDocument("builtin value >> file_complete.txt")
+
+    tokens = [(cls, val) for cls, val in lexer.lex_document(document)(0) if cls]
+
+    assert ("class:link", ">>") in tokens
+    assert ("class:link", ">") not in tokens

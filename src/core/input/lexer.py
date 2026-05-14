@@ -17,12 +17,33 @@ class ShellLexer(Lexer):
             parts = []
             buf = ""
             i = 0
+            in_quotes = False
+            quote_char = None
+            link_symbols = sorted(COMMAND_LINKING_SYMBOLS, key=len, reverse=True)
 
             while i < len(line):
+                ch = line[i]
+
+                if ch == "\\" and in_quotes and quote_char == '"' and i + 1 < len(line):
+                    buf += line[i:i + 2]
+                    i += 2
+                    continue
+
+                if ch in ("'", '"'):
+                    if not in_quotes:
+                        in_quotes = True
+                        quote_char = ch
+                    elif ch == quote_char:
+                        in_quotes = False
+                        quote_char = None
+                    buf += ch
+                    i += 1
+                    continue
+
                 matched = False
 
-                for sym in COMMAND_LINKING_SYMBOLS:
-                    if line.startswith(sym, i):
+                for sym in link_symbols:
+                    if not in_quotes and line.startswith(sym, i):
                         if buf:
                             parts.append(("segment", buf))
                         parts.append(("link", sym))
@@ -45,7 +66,7 @@ class ShellLexer(Lexer):
             current = ""
             in_quotes = False
             quote_char = None
-            word_index = 0
+            quoted_word = False
             seen_command = False
 
             def flush_word(word, quoted=False):
@@ -106,26 +127,30 @@ class ShellLexer(Lexer):
             while i < len(segment):
                 ch = segment[i]
 
+                if ch == "\\" and in_quotes and quote_char == '"' and i + 1 < len(segment):
+                    current += segment[i:i + 2]
+                    i += 2
+                    continue
+
                 if ch in ("'", '"'):
                     if not in_quotes:
                         in_quotes = True
                         quote_char = ch
-                        current = ch  # start including quote
+                        quoted_word = True
+                        current += ch
                     elif ch == quote_char:
                         in_quotes = False
                         current += ch
-                        flush_word(current, quoted=True)
-                        current = ""
-                        word_index += 1
                         quote_char = None
+                    else:
+                        current += ch
                     i += 1
                     continue
 
                 if ch == " " and not in_quotes:
-                    flush_word(current)
-                    if current:
-                        word_index += 1
+                    flush_word(current, quoted=quoted_word)
                     current = ""
+                    quoted_word = False
                     tokens.append(("", " "))  # preserve real space
                     i += 1
                     continue
@@ -135,7 +160,7 @@ class ShellLexer(Lexer):
 
             # flush anything left (in case segment ends without space)
             if current:
-                flush_word(current, quoted=in_quotes)
+                flush_word(current, quoted=quoted_word or in_quotes)
 
             return tokens
 
