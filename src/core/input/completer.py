@@ -4,6 +4,7 @@ from prompt_toolkit.completion import Completer, Completion
 
 import ai
 import config
+from ai.translation import translate_to_command
 from config import COMPLETE_ARGS, COMPLETE_PATHS, COMPLETE_HISTORY
 
 
@@ -360,6 +361,7 @@ class CommandCompleter(Completer):
 
     def complete_ai(self, text):
         out = []
+
         if config.AI_ENABLED and ai.AI_INTERFACE:
             current_os = config.PLATFORM
             cwd = self.input_handler.shell.working_dir
@@ -367,15 +369,20 @@ class CommandCompleter(Completer):
             history = self.ai_limit_history(self.input_handler.get_history())
             history_text = ", ".join(history)
             nearby_files_text = ", ".join(nearby_files)
-            ai_completions = ai.AI_INTERFACE.autocomplete(
-                text,
-                os=current_os,
-                cwd=cwd,
-                nearby_files=nearby_files_text,
-                history_text=history_text,
+
+            ai_completions = [translate_to_command(text, os=current_os, cwd=cwd)]
+            ai_completions.extend(
+                ai.AI_INTERFACE.autocomplete
+                (
+                    text,
+                    os=current_os,
+                    cwd=cwd,
+                    nearby_files=nearby_files_text,
+                    history_text=history_text,
+                )
             )
 
-            for completion in ai_completions:
+            for i, completion in enumerate(ai_completions):
                 if not completion:
                     continue
 
@@ -391,7 +398,7 @@ class CommandCompleter(Completer):
                         insert_text,
                         start_position=-len(text),
                         style="class:completion-ai",
-                        display_meta=f"AI{display}",
+                        display_meta=f"AI{display}" if i != 0 else f"AI (Natural -> Command){display}",
                     )
                 )
         return out

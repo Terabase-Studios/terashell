@@ -46,8 +46,8 @@ class ChatSession:
 
 @dataclass
 class AutocompleteConfig:
-    max_tokens: int = 32
-    temperature: float = 0.0
+    max_tokens: int = 128
+    temperature: float = 0.15
     top_p: float = 1.0
 
 
@@ -205,18 +205,25 @@ class AIInterface:
         response = self.client.chat.completions.create(
             model=self.current_model,
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a shell command autocomplete engine.\n"
-                        "Complete partial shell commands naturally.\n"
-                        "Return ONLY completions.\n"
-                        "One completion per line.\n"
-                        "No explanations.\n"
-                        "No markdown.\n"
-                        "No numbering.\n"
-                    )
-                },
+            {
+                "role": "system",
+                "content": (
+                    "You are a shell autocomplete engine.\n"
+                    "\n"
+                    "Generate multiple likely shell command completions.\n"
+                    "\n"
+                    "Rules:\n"
+                    "- Output ONLY completions.\n"
+                    "- One completion per line.\n"
+                    "- No markdown.\n"
+                    "- No explanations.\n"
+                    "- No numbering.\n"
+                    "- No bullet points.\n"
+                    "- Each completion must begin with the user's current input.\n"
+                    "- Prefer realistic and commonly used commands.\n"
+                    "- Generate diverse completions.\n"
+                )
+            },
                 {
                     "role": "user",
                     "content": context
@@ -225,7 +232,6 @@ class AIInterface:
             temperature=0.0,
             top_p=1.0,
             max_tokens=config.max_tokens,
-            stop=["\n\n"],
         )
 
         raw = response.choices[0].message.content or ""
@@ -333,19 +339,10 @@ if __name__ == "__main__":
 
     print("Loading Model")
     ai.select_model("small:latest")
-    print("Model Loaded")
+    print("Model Loaded\n")
 
+    print("--- autocomplete ---")
     result = ai.autocomplete("systemctl")
-
-    for cmd in result:
-        print(cmd)
-
-    result = ai.autocomplete("docker")
-
-    for cmd in result:
-        print(cmd)
-
-    result = ai.autocomplete("git co")
 
     for cmd in result:
         print(cmd)
