@@ -7,7 +7,7 @@ from openai import OpenAI
 from yaspin import yaspin
 
 AI_INTERFACE: AIInterface
-
+working_locks = []
 
 @dataclass
 class ModelInfo:
@@ -153,6 +153,7 @@ class AIInterface:
         if not self.current_model:
             raise RuntimeError("No model selected")
 
+        working_locks.append(session)
         config = config or RequestConfig()
 
         response = self.client.chat.completions.create(
@@ -176,6 +177,10 @@ class AIInterface:
             print()
             return full
 
+        index = working_locks.index(session)
+        if index != -1:
+            working_locks.pop(index)
+
         return response.choices[0].message.content or ""
 
 
@@ -190,6 +195,8 @@ class AIInterface:
             raise RuntimeError("No model selected")
 
         config = config or AutocompleteConfig()
+
+        working_locks.append(config)
 
         prefix = prefix.rstrip()
 
@@ -274,6 +281,10 @@ class AIInterface:
 
             completions.append(line)
 
+        index = working_locks.index(config)
+        if index != -1:
+            working_locks.pop(index)
+
         return completions[:8]
 
 
@@ -326,6 +337,10 @@ def init() -> None:
         config.AI_ENABLED = False
     else:
         print(f"Loaded {AI_MODEL}")
+
+
+def is_working() -> bool:
+    return len(working_locks) > 0
 
 
 if __name__ == "__main__":

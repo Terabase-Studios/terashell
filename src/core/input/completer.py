@@ -7,6 +7,7 @@ import config
 from ai.translation import translate_to_command
 from config import COMPLETE_ARGS, COMPLETE_PATHS, COMPLETE_HISTORY
 
+ai_mode = False
 
 class CommandCompleter(Completer):
     """
@@ -423,10 +424,33 @@ class CommandCompleter(Completer):
 
     # -------------------- Main entry -------------------- #
     def get_completions(self, document, complete_event):
+        global ai_mode
         try:
+
             text = document.text_before_cursor
             tokens = text.split()
             candidates = []
+
+            # AI-only mode
+            if ai_mode:
+                completions = self.complete_ai(text)
+                if len(completions) > 0:
+                    for c in completions:
+                        yield Completion(
+                            c.text if hasattr(c, "text") else c,
+                            start_position=-len(text),
+                            style="class:completion-ai",
+                            display_meta="AI"
+                        )
+                else:
+                    yield Completion(
+                        "NO RESULT",
+                        start_position=-len(text),
+                        style="class:completion-ai",
+                        display_meta="AI"
+                    )
+                ai_mode = False
+                return
 
             if not tokens:
                 candidates.extend(self._complete_command(""))
@@ -466,8 +490,6 @@ class CommandCompleter(Completer):
                 for c in self._dedupe(candidates):
                     yield c
 
-            for completion in self.complete_ai(text):
-                yield completion
         except Exception as e:
             # Get the traceback object from the exception
             tb = e.__traceback__

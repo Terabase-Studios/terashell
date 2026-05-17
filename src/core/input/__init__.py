@@ -1,13 +1,17 @@
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.shortcuts import CompleteStyle
-from prompt_toolkit.styles import Style
 
+import ai
+import config
 from config import AUTO_COMPLETE, HISTORY_FILE, PROMPT_HIGHLIGHTING
 from core.indexer import CommandIndexer
 from .completer import CommandCompleter
 from .lexer import ShellLexer
+from .style import style
+from .toolbar import bottom_toolbar
 
 kb = KeyBindings()
 
@@ -40,45 +44,21 @@ def accept_path_completion_or_submit(event):
         buffer.validate_and_handle()
 
 
-# Lexer with live path highlighting
+@kb.add('c-j')
+def _(event):
+    if not config.AI_ENABLED or not ai.AI_INTERFACE:
+        return
+    from . import completer
+
+    buffer = event.app.current_buffer
+
+    completer.ai_mode = True
+
+    buffer.complete_state = None
+    buffer.start_completion(select_first=False)
 
 
-# Background for autocomplete
-autocomplete_bg = "#1a1a1a"
 
-# Style for colors
-style_dict = {
-    # commands & control
-    "command": "bold #c98c6c",
-    "built_in": "#69aa71",
-    "sudo": "bold #db5d6b",
-    "completion-ai": "bold #c4b5fd",
-
-    # arguments & values
-    "arg": "#D4D4D4",
-    "digit": "#2aacb8",
-    "optional": "#737d84",
-    "quotes": "italic #69aa71",
-
-    # filesystem
-    "path": "#6f94dd",
-    "file": "#EDEDED",
-    "path_complete": "underline #6f94dd",
-    "file_complete": "underline #EDEDED",
-    "link": "#7b87b8",
-
-    # environment & errors
-    "env_var": "#5f826b",
-    "error": "bold #db5d6b",
-
-    # Menu background
-    "completion-menu": f"bg:{autocomplete_bg}",
-    "completion-menu.completion": f"bg:{autocomplete_bg}",
-    "completion-menu.completion.current": f"bg:#444444",
-    "scrollbar.background": f"bg:{autocomplete_bg}",
-    "scrollbar.arrow": "bg:#444444",
-}
-style = Style.from_dict(style_dict)
 
 
 # Shell input
@@ -114,7 +94,10 @@ class ShellInput:
             complete_while_typing=True,
             complete_in_thread=True,
             complete_style=CompleteStyle.MULTI_COLUMN,
-            key_bindings=kb
+            key_bindings=kb,
+            bottom_toolbar=bottom_toolbar,
+            refresh_interval=0.1,
+            color_depth=ColorDepth.TRUE_COLOR
         )
         self.cmd_prefix = cmd_prefix
 
