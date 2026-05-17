@@ -2,6 +2,8 @@ import json
 import os
 import sys
 import traceback
+from dataclasses import dataclass, field
+from typing import Callable
 
 from yaspin import yaspin
 
@@ -14,86 +16,124 @@ BOLD = "\033[1m"
 RESET = "\033[0m"
 
 
+@dataclass
+class CommandNode:
+    handler: Callable | None = None
+    help: str | None = None
+    simple_help: str | None = None
+    children: dict[str, "CommandNode"] = field(default_factory=dict)
+
+
 class ShellCommands:
     def __init__(self, shell):
         self.shell = shell
 
-        self.commands = {
-            "t?": self._cmd_help,
-            "f": self._cmd_critical,
-            "exit": self._cmd_exit,
-            "cd": self._cmd_cd,
-            "map": self._cmd_map,
-            "ai": self._cmd_ai,
-            "history": self._cmd_history,
-            "history clear": self._cmd_history,
-            "activate": self._cmd_activate,
-            "deactivate": self._cmd_deactivate,
-            #    "nest list": self._cmd_nest,
-            #    "nest": self._cmd_nest,
-            "instr add": self._cmd_instr,
-            "instr remove": self._cmd_instr,
-            "instr list": self._cmd_instr,
-            "instr save": self._cmd_instr,
-            "instr clear": self._cmd_instr,
-            "instr add-last": self._cmd_instr,
-            "instr": self._cmd_instr,
-            "bg tasks": self._cmd_bg,
-            "bg output": self._cmd_bg,
-            "bg kill": self._cmd_bg,
-            "bg": self._cmd_bg,
-        }
+        self.command_tree = CommandNode()
+        self._register_commands()
+        self._refresh_indexes()
 
-        self.help_simple = {
-            "t?": f"See {SHELL_NAME} commands.",
-            "t? /all": f"See {SHELL_NAME} commands and subcommands.",
-            "f": f"Fall back to another shell on Unix. Restart on Windows",
-            "exit": f"Exit the current {SHELL_NAME} instance.",
-            "map": f"Run a tool and its commands recursively and add/update autocompletion.",
-            "ai": "Connect to the configured AI service and enable AI tools.",
-            "history": "Managed stored inputs.",
-            "activate": "Usage: \"activate <venv>\" Activate a Python virtual environment.",
-            "deactivate": "Deactivate the current virtual environment.",
-            #    "nest": "Usage: Manage shell sub-instances with different saved data",
-            "instr": f"Create an instruction list within {SHELL_NAME}.",
-            "bg": "Manage background tasks. Create a background task with the \'&\' arg.",
-        }
+    def _register_commands(self):
+        self.register("t?", self._cmd_help, f"See {SHELL_NAME} commands.")
+        self.register("t? /all", help=f"See {SHELL_NAME} commands and subcommands.")
+        self.register("f", self._cmd_critical, "Fall back to another shell on Unix. Restart on Windows")
+        self.register("exit", self._cmd_exit, f"Exit the current {SHELL_NAME} instance.")
+        self.register("cd", self._cmd_cd)
+        self.register("map", self._cmd_map, "Run a tool and its commands recursively and add/update autocompletion.")
+        self.register("ai", self._cmd_ai, "Connect to the configured AI service and enable AI tools.")
+        self.register("history", self._cmd_history, "See all previous inputs.", simple_help="Managed stored inputs.")
+        self.register("history clear", help="Clear input history.")
+        self.register("activate", self._cmd_activate, 'Usage: "activate <venv>" Activate a Python virtual environment.')
+        self.register("deactivate", self._cmd_deactivate, "Deactivate the current virtual environment.")
+        # self.register("nest", self._cmd_nest, 'Usage: "nest <shell>" Open a shell sub-instance with different saved data')
+        # self.register("nest list", help="List all shell sub-instances")
+        self.register("instr", self._cmd_instr, f"Create an instruction list within {SHELL_NAME}.")
+        self.register("instr add", help="Add a new instruction step.")
+        self.register("instr add-last", help="Save the last executed command as an instruction.")
+        self.register("instr list", help="List all instruction steps.")
+        self.register("instr save", help='Usage: "instr save <file>" Save instructions to a markdown file.')
+        self.register("instr remove", help="Remove the most recent instruction step.")
+        self.register("instr clear", help="Clear all instruction steps.")
+        self.register("bg", self._cmd_bg, "Manage background tasks. Create a background task with the '&' arg.")
+        self.register("bg tasks", help="List all background tasks.")
+        self.register("bg output", help="Usage: \"bg output <id>\" see a task's output")
+        self.register("bg kill", help="Usage: \"bg kill <id>\" send a kill signal to a task")
 
-        self.help = {
-            "t?": f"See {SHELL_NAME} commands.",
-            "t? /all": f"See {SHELL_NAME} commands and subcommands.",
-            "f": f"Fall back to another shell on Unix. Restart on Windows",
-            "exit": f"Exit the current {SHELL_NAME} instance.",
-            "map": f"Run a tool and its commands recursively and add/update autocompletion.",
-            "ai": "Connect to the configured AI service and enable AI tools.",
-            "history": "See all previous inputs.",
-            "history clear": "Clear input history.",
-            "activate": "Usage: \"activate <venv>\" Activate a Python virtual environment.",
-            "deactivate": "Deactivate the current virtual environment.",
-            #    "nest": "Usage: \"nest <shell>\" Open a shell sub-instance with different saved data",
-            #    "nest list": "List all shell sub-instances",
-            "instr add": "Add a new instruction step.",
-            "instr add-last": "Save the last executed command as an instruction.",
-            "instr list": "List all instruction steps.",
-            "instr save": "Usage: \"instr save <file>\" Save instructions to a markdown file.",
-            "instr remove": "Remove the most recent instruction step.",
-            "instr clear": "Clear all instruction steps.",
-            "bg tasks": "List all background tasks.",
-            "bg output": "Usage: \"bg output <id>\"see a task's output",
-            "bg kill": "Usage: \"bg kill <id>\"send a kill signal to a task",
-        }
+    def register(self, command, handler=None, help=None, simple_help=None):
+        node = self.command_tree
+        for part in command.split():
+            node = node.children.setdefault(part, CommandNode())
+        node.handler = handler or node.handler
+        node.help = help if help is not None else node.help
+        node.simple_help = simple_help if simple_help is not None else node.simple_help
+        self._refresh_indexes()
 
-        self.command_list = list(self.commands.keys())
+    def _refresh_indexes(self):
+        self.commands = self._flatten_handlers()
+        self.help_simple = self._flatten_help(simple=True)
+        self.help = self._flatten_help(simple=False)
+        self.command_list = list(self._flatten_command_paths())
+
+    def _flatten_command_paths(self):
+        yield from self._walk_command_paths(include_all=True)
+
+    def _flatten_handlers(self):
+        handlers = {}
+        for path, node in self._walk_nodes():
+            if node.handler is not None:
+                handlers[path] = node.handler
+        return handlers
+
+    def _flatten_help(self, simple):
+        help_items = {}
+        for path, node in self._walk_nodes():
+            description = node.simple_help if simple else node.help
+            if description is None and simple and node.handler is not None:
+                description = node.help
+            if description is not None:
+                help_items[path] = description
+        return help_items
+
+    def _walk_command_paths(self, include_all=False):
+        for path, node in self._walk_nodes():
+            if include_all or node.handler is not None:
+                yield path
+
+    def _walk_nodes(self):
+        def walk(node, parts):
+            for name, child in node.children.items():
+                child_parts = parts + [name]
+                yield " ".join(child_parts), child
+                yield from walk(child, child_parts)
+
+        yield from walk(self.command_tree, [])
+
+    def _resolve_command(self, parts):
+        node = self.command_tree
+        best_handler = None
+        best_depth = 0
+
+        for index, part in enumerate(parts):
+            node = node.children.get(part)
+            if node is None:
+                break
+            if node.handler is not None:
+                best_handler = node.handler
+                best_depth = index + 1
+
+        if best_handler is None:
+            return None, []
+
+        return best_handler, parts[best_depth:]
 
     def get_commands(self):
         return self.command_list
 
     def handle_command(self, line):
         parts = line.split()
-        cmd = parts[0]
-        args = parts[1:]
+        if not parts:
+            return False
 
-        func = self.commands.get(cmd)
+        func, args = self._resolve_command(parts)
         if func is None:
             return False  # tell the main shell to execute normally
 

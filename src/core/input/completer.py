@@ -436,12 +436,7 @@ class CommandCompleter(Completer):
                 completions = self.complete_ai(text)
                 if len(completions) > 0:
                     for c in completions:
-                        yield Completion(
-                            c.text if hasattr(c, "text") else c,
-                            start_position=-len(text),
-                            style="class:completion-ai",
-                            display_meta="AI"
-                        )
+                        yield c
                 else:
                     yield Completion(
                         "NO RESULT",

@@ -3,3 +3,4 @@ psutil
 prettytable
 yaspin
 openai
+platformdirs
