@@ -160,6 +160,23 @@ def _load_settings():
     return merged_settings
 
 
+def save_settings(**updates):
+    settings = _load_settings()
+    settings.update({key: value for key, value in updates.items() if key in FLAT_DEFAULT_SETTINGS})
+    _write_settings(_categorize_settings(settings))
+
+    for key, value in updates.items():
+        if key in FLAT_DEFAULT_SETTINGS:
+            globals()[key] = value
+
+
+def reset_settings():
+    _write_settings(DEFAULT_SETTINGS)
+
+    for key, value in FLAT_DEFAULT_SETTINGS.items():
+        globals()[key] = value
+
+
 for _setting_name, _setting_value in _load_settings().items():
     globals()[_setting_name] = _setting_value
 

@@ -4,6 +4,7 @@ import sys
 import traceback
 from dataclasses import dataclass, field
 from typing import Callable
+from urllib.parse import urlparse
 
 from yaspin import yaspin
 
@@ -20,7 +21,7 @@ RESET = "\033[0m"
 class CommandNode:
     handler: Callable | None = None
     help: str | None = None
-    simple_help: str | None = None
+    simple_help: str | bool | None = None
     children: dict[str, "CommandNode"] = field(default_factory=dict)
 
 
@@ -38,8 +39,11 @@ class ShellCommands:
         self.register("f", self._cmd_critical, "Fall back to another shell on Unix. Restart on Windows")
         self.register("exit", self._cmd_exit, f"Exit the current {SHELL_NAME} instance.")
         self.register("cd", self._cmd_cd)
+        self.register("reset", self._cmd_reset, f"Reset {SHELL_NAME} configuration to defaults.")
         self.register("map", self._cmd_map, "Run a tool and its commands recursively and add/update autocompletion.")
         self.register("ai", self._cmd_ai, "Connect to the configured AI service and enable AI tools.")
+        self.register("ai configure", self._cmd_ai_configure, help="Configure the AI server connection.",
+                      simple_help=False)
         self.register("history", self._cmd_history, "See all previous inputs.", simple_help="Managed stored inputs.")
         self.register("history clear", help="Clear input history.")
         self.register("activate", self._cmd_activate, 'Usage: "activate <venv>" Activate a Python virtual environment.')
@@ -87,6 +91,8 @@ class ShellCommands:
         help_items = {}
         for path, node in self._walk_nodes():
             description = node.simple_help if simple else node.help
+            if description is False:
+                continue
             if description is None and simple and node.handler is not None:
                 description = node.help
             if description is not None:
@@ -168,6 +174,17 @@ class ShellCommands:
     def _cmd_exit(self, args):
         self.shell.running = False
 
+    def _cmd_reset(self, args):
+        import config
+
+        choice = input(f"Reset {SHELL_NAME} configuration to defaults? [y/N] ").strip().lower()
+        if choice != "y":
+            print("Aborted.")
+            return
+
+        config.reset_settings()
+        print(f"{SHELL_NAME} configuration reset.")
+
     def _cmd_cd(self, args):
         previous_dir = self.shell.working_dir
         try:
@@ -207,7 +224,87 @@ class ShellCommands:
 
     def _cmd_ai(self, args):
         import ai
+        import config
+
+        if not config.AI_SERVER_IP or not config.AI_MODEL or config.AI_MODEL == "none":
+            print("AI is not configured. Run: ai configure")
+            return
+
         ai.init()
+        if not config.AI_ENABLED:
+            print("AI failed to connect. Run: ai configure")
+            return
+
+        print()
+        print("Press Ctrl+J to trigger AI autocomplete")
+
+    def _cmd_ai_configure(self, args):
+        import ai
+        import config
+
+        current_address, current_port = self._split_ai_server(config.AI_SERVER_IP)
+        address = self._prompt_with_default("AI server address", current_address)
+        port = self._prompt_with_default("AI server port", current_port)
+        api_key = self._prompt_with_default("AI API key", config.AI_API_KEY)
+        base_url = self._build_ai_server_url(address, port)
+        models = []
+
+        if base_url:
+            try:
+                interface = ai.AIInterface(base_url, api_key)
+                interface.print_models()
+                models = interface.get_models()
+            except Exception as e:
+                print(f"Could not list models from {base_url}: {e}")
+
+        model = self._prompt_with_default("AI model", config.AI_MODEL if config.AI_MODEL != "none" else "")
+        model = self._resolve_model_selection(model, models)
+
+        config.save_settings(
+            AI_SERVER_IP=base_url,
+            AI_API_KEY=api_key,
+            AI_MODEL=model,
+        )
+        print("AI configuration saved.")
+
+    def _prompt_with_default(self, label, default):
+        if default:
+            value = input(f"{label} [{default}]: ").strip()
+            return value or default
+        return input(f"{label}: ").strip()
+
+    def _split_ai_server(self, server):
+        if not server:
+            return "", ""
+
+        parsed = urlparse(server if "://" in server else f"http://{server}")
+        address = f"{parsed.scheme}://{parsed.hostname}" if parsed.hostname else server
+        port = str(parsed.port) if parsed.port else ""
+        return address, port
+
+    def _build_ai_server_url(self, address, port):
+        if not address:
+            return ""
+
+        parsed = urlparse(address if "://" in address else f"http://{address}")
+        scheme = parsed.scheme or "http"
+        host = parsed.hostname or address
+        chosen_port = port or (str(parsed.port) if parsed.port else "")
+
+        if chosen_port:
+            return f"{scheme}://{host}:{chosen_port}"
+        return f"{scheme}://{host}"
+
+    def _resolve_model_selection(self, selection, models):
+        if not selection.isdigit():
+            return selection
+
+        index = int(selection)
+        if 0 <= index < len(models):
+            return models[index].id
+
+        print(f"No model at index {selection}; saving it as typed.")
+        return selection
 
     def _cmd_history(self, args):
         if not args:
