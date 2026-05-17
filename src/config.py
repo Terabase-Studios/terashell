@@ -11,7 +11,7 @@ except ImportError:
     from .compatability.migrate_cache import migrate_legacy_cache
 
 SHELL_NAME = "TeraShell"
-VERSION = "0.6.0"
+VERSION = "0.7.0"
 
 # Cache files
 LEGACY_APP_DIR = os.path.expanduser(f"~/.{SHELL_NAME}")
